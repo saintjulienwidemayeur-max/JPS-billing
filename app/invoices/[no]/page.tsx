@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { markInvoiceSent, cancelInvoice } from "@/lib/billing-actions";
+import { markInvoiceSent, cancelInvoice, voidPayment } from "@/lib/billing-actions";
+import { ConfirmSubmit } from "@/components/confirm-submit";
 import { db, custOf, repOf, wrCode, total, paidAmt, balance, payStatus, money, insuranceFee, quote, r2, freightFee, freightQty, freightDesc } from "@/lib/wh-store";
 import { cardFees } from "@/lib/pricing";
 import { shortDate } from "@/lib/fmt";
@@ -65,7 +66,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
       </dl>
       {w.payments.length > 0 && (
         <div className="mt-4 text-xs"><div className="font-semibold">Payments received</div>
-          {w.payments.map((p, i) => <div key={i} className="flex justify-between border-b border-zinc-200 py-0.5"><span>{p.date} · {p.method}{p.ref && ` · ${p.ref}`}</span><span>{money(p.amount)}</span></div>)}
+          {w.payments.map((p, i) => <div key={i} className="flex items-center justify-between gap-3 border-b border-zinc-200 py-0.5"><span>{p.date} · {p.method}{p.ref && ` · ${p.ref}`}</span><span className="flex items-center gap-3">{money(p.amount)}<form action={voidPayment.bind(null, w.id, i)} className="no-print"><ConfirmSubmit message={`Void this payment of ${money(p.amount)}?`} className="!h-6 !bg-white !px-2 !text-xs !text-red-700 underline">Void</ConfirmSubmit></form></span></div>)}
         </div>
       )}
       {balance(w) > 0 && (

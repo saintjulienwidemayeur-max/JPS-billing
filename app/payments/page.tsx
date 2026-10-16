@@ -2,7 +2,7 @@ import Link from "next/link";
 import { WhLink } from "@/components/wh-link";
 import { db, creditOf, balance, total, wrCode, money, r2 } from "@/lib/wh-store";
 import { usToIso } from "@/lib/clock";
-import { receivePayment, addPayment } from "@/lib/billing-actions";
+import { receivePayment, addPayment, applyCredit } from "@/lib/billing-actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -36,6 +36,12 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
               <datalist id="payMethods">{db.payMethods.map((m) => <option key={m} value={m} />)}</datalist>
             </form>
           ) : <p className="mt-2 text-sm font-medium text-green-700">Paid in full.</p>}
+          {balance(inv) > 0 && c && creditOf(c) > 0 && (
+            <form action={applyCredit.bind(null, inv.id)} className="mt-3 flex flex-wrap items-center gap-2 rounded-md bg-green-50 p-2 text-sm">
+              <span>The customer has <b>{money(creditOf(c))}</b> of credit.</span>
+              <Button type="submit" variant="outline">Use the credit on this invoice</Button>
+            </form>
+          )}
           <p className="mt-2 text-xs"><Link href={`/invoices/${inv.invoice}`} className="text-brand underline">Back to the invoice</Link></p>
         </section>
       )}

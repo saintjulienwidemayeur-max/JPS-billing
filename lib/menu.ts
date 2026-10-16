@@ -1,7 +1,7 @@
 // The billing app's menu: sections like the old billing software (customers, receivables, reports, payables). The sidebar, the main menu, each
 // section's page and the breadcrumb all read this list, so a page is added in one place.
 import { allowed, isOn, type Claims } from "./access";
-import { Home, Users, FileText, FilePlus2, Banknote, Archive, ShoppingCart, Wallet, CalendarDays, ScrollText, Receipt, FileUp, Landmark, type LucideIcon } from "lucide-react";
+import { Home, Users, FileText, FilePlus2, Banknote, Archive, ShoppingCart, Wallet, CalendarDays, ScrollText, Receipt, FileUp, Landmark, Ship, Warehouse, type LucideIcon } from "lucide-react";
 
 export type MenuPage = { href: string; label: string; icon: LucideIcon; desc: string; adminOnly?: boolean };
 export type MenuSection = { slug: string; title: string; icon: LucideIcon; blurb: string; pages: MenuPage[] };
@@ -31,6 +31,8 @@ export const SECTIONS: MenuSection[] = [
     pages: [
       { href: "/reports/daily", label: "Daily payment report", icon: CalendarDays, desc: "Everything received on one day, by method" },
       { href: "/reports/payment-log", label: "Payment log report", icon: ScrollText, desc: "The payments of a month or a period, by location" },
+      { href: "/reports/shipments", label: "Shipments report", icon: Ship, desc: "What each shipment billed, was paid and is still owed" },
+      { href: "/reports/storage", label: "Storage (30+ days)", icon: Warehouse, desc: "Receipts waiting more than 30 days: the storage fee of the terms" },
     ],
   },
   {

@@ -23,7 +23,7 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
         <form className="mt-3 flex flex-wrap items-center gap-2">
           <label className="text-xs text-zinc-600">Month <Input name="month" type="month" defaultValue={month} className="w-44" /></label>
           <label className="text-xs text-zinc-600">Location <select name="loc" defaultValue={loc} className="block h-9 rounded-md border bg-white px-2 text-sm"><option value="">All locations</option>{locations().map((l) => <option key={l}>{l}</option>)}</select></label>
-          <Button type="submit" variant="outline" className="self-end">Show</Button><span className="self-end"><PrintButton label="Print the report" /></span>
+          <Button type="submit" variant="outline" className="self-end">Show</Button><a href={`/reports/payment-log/export?month=${month}&loc=${encodeURIComponent(loc)}`} className="self-end pb-2 text-sm font-medium text-brand underline">Download CSV</a><span className="self-end"><PrintButton label="Print the report" /></span>
         </form>
       </div>
       <div className="mt-4 flex items-start justify-between gap-4">

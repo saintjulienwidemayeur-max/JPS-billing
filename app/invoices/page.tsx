@@ -20,7 +20,7 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
   const sum = (f: (w: (typeof rows)[number]) => number) => rows.reduce((a, w) => a + f(w), 0);
   return (
     <main className="mx-auto max-w-6xl px-4 py-6">
-      <h1>Invoices</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2"><h1>Invoices</h1><a href="/invoices/export" className="text-sm font-medium text-brand underline">Download all as CSV (Excel)</a></div>
       <p className="text-sm text-zinc-600">Every invoice, with what was paid and what is still owed. Make a new one in <b>Invoice</b>; enter a payment with <b>Pay</b>.</p>
       <form method="get" className="mt-4 flex flex-wrap gap-2">
         <select name="ship" defaultValue={q.ship ?? ""} className={sel} aria-label="Ship type"><option value="">All ship types</option><option value="Air">Air (JPF)</option><option value="Ocean">Ocean (JPL)</option></select>
