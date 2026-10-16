@@ -16,10 +16,10 @@ The billing side of JP's, kept apart from the warehouse app (`app-adm-JPS`) as t
 Both apps keep a working copy in memory and save every change to the same Postgres (`DATABASE_URL`). On every request each app calls `refresh()` (`lib/persist.ts`): it brings in the rows the other app changed (a row you changed and have not saved yet is kept, counters take the larger value so the two apps never give out the same number). Deploy both apps with the **same `DATABASE_URL`**. Changes of the other app show up within a few seconds.
 
 ## Sign-in
-The people and codes are the warehouse app's (table `wh_users`): same name and code here. An administrator opens everything; a limited user needs the **Billing system** access (warehouse app > Administration > Users & access). Set `AUTH_SECRET`.
+The people and codes are the warehouse app's (table `wh_users`): same name and code here. An administrator opens everything; a limited user needs the **Billing system (separate app): may sign in** box ticked (warehouse app > Administration > Users & access). Set `AUTH_SECRET`.
 
 ## Deploy on Render
-New Web Service from this repo: Build `yarn install && yarn build`, Start `yarn start`. Environment: `DATABASE_URL` (the same as the warehouse app), `AUTH_SECRET`, `WAREHOUSE_URL` (address of the warehouse app). In the warehouse app set `BILLING_URL` to this app's address.
+New Web Service from this repo: Build `yarn install && yarn build`, Start `yarn start`. Environment: `DATABASE_URL` (the same as the warehouse app), `AUTH_SECRET`, `WAREHOUSE_URL` (address of the warehouse app).
 
 ## Without a database
 With no `DATABASE_URL` everything lives in memory and resets when the server restarts (only for trying it out).
