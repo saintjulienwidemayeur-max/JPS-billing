@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { markInvoiceSent, cancelInvoice, voidPayment } from "@/lib/billing-actions";
+import { cancelInvoice, voidPayment } from "@/lib/billing-actions";
+import { listDocs } from "@/lib/persist";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { db, custOf, repOf, wrCode, total, paidAmt, balance, payStatus, money, insuranceFee, quote, r2, freightFee, freightQty, freightDesc } from "@/lib/wh-store";
 import { cardFees } from "@/lib/pricing";
@@ -25,6 +26,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
     ...(insuranceFee(w) > 0 ? [{ desc: `Certificate of insurance - Ref. WR: ${w.id} - declared value ${money(w.declared)}`, amount: quote(w).customer }] : []),
   ];
   const card = cardFees(balance(w));
+  const docs = await listDocs("invoice", w.invoice ?? "");
   return (
     <main className="mx-auto max-w-3xl px-4 py-6 text-sm">
       <div className="flex items-start justify-between gap-4">
@@ -34,12 +36,15 @@ export default async function Page({ params, searchParams }: { params: Promise<{
       </div>
       {q.err && <p role="alert" className="no-print mt-2 font-medium text-red-700">{q.err}</p>}
       {q.ok && <p className="no-print mt-2 font-medium text-green-700">{q.ok}</p>}
-      <form className="no-print mt-3 flex flex-wrap items-center gap-2">
-        {w.email ? <a href={`mailto:${w.email}?subject=${encodeURIComponent(`JP's Logistics invoice ${w.invoice}`)}&body=${encodeURIComponent(`Hello ${w.customer},\n\nInvoice ${w.invoice} for ${wrCode(w)}: total ${money(total(w))}, balance ${money(balance(w))}.\n\nJP's Logistics & More`)}`} className="inline-flex h-9 items-center rounded-md border border-zinc-300 bg-white px-3 font-medium">Email invoice</a> : <span className="text-xs text-zinc-500">Add an email on the receipt to send it.</span>}
-        <button formAction={markInvoiceSent.bind(null, w.id)} className="inline-flex h-9 items-center rounded-md border border-zinc-300 bg-white px-3 font-medium">{w.invoiceSent ? `Emailed ${w.invoiceSent} · mark again` : "Mark as emailed"}</button>
+      <div className="no-print mt-3 flex flex-wrap items-center gap-2">
+        <a href={`/invoices/${encodeURIComponent(w.invoice ?? "")}/pdf`} target="_blank" className="inline-flex h-9 items-center rounded-md border border-zinc-300 bg-white px-3 font-medium">Download PDF</a>
         <a href={`/payments?inv=${w.invoice}`} className="inline-flex h-9 items-center rounded-md border border-zinc-300 bg-white px-3 font-medium">Enter payment</a>
-        <button formAction={cancelInvoice.bind(null, w.id)} className="ml-auto text-red-700 underline">Cancel invoice</button>
-      </form>
+        <form className="ml-auto"><button formAction={cancelInvoice.bind(null, w.id)} className="text-red-700 underline">Cancel invoice</button></form>
+      </div>
+      <p className={`no-print mt-2 text-xs ${w.invoiceSent ? "text-green-700" : w.invoiceMail?.error ? "text-amber-800" : "text-zinc-500"}`}>
+        {w.invoiceSent ? `E-mailed to the customer by itself on ${w.invoiceSent} (PDF attached).` : w.invoiceMail?.error ? `Not e-mailed: ${w.invoiceMail.error}${w.invoiceMail.tries < 4 ? " It will be tried again by itself." : ""}` : "The invoice is e-mailed to the customer by itself a few seconds after it is made."}
+      </p>
+      {docs.length > 0 && <ul className="no-print mt-1 grid gap-0.5 text-xs">{docs.map((d) => <li key={d.id}><a href={`/docs/${d.id}`} target="_blank" className="text-brand underline">{d.name}</a> <span className="text-zinc-500">· {d.note} · {new Date(d.created).toLocaleString("en-US")}</span></li>)}</ul>}
       <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-3">
         <div><dt className="text-xs text-zinc-500">Invoice date</dt><dd className="font-medium">{shortDate(w.invoiceDate ?? w.date)}</dd></div>
         <div><dt className="text-xs text-zinc-500">Shipment ID</dt><dd className="font-medium">{shipment || "–"}</dd></div>

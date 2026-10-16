@@ -8,7 +8,7 @@ import { InstallButton } from "@/components/pwa";
 import { HOME, locate, isOn, visibleSections } from "@/lib/menu";
 
 const Pill = ({ n, active }: { n?: number; active?: boolean }) => (n ? <span className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-semibold leading-none ${active ? "bg-white text-brand" : "bg-white/20 text-white"}`}>{n}</span> : null);
-const KEY = "jps_billing_nav";
+const KEY = "jps_nav_open"; // "1" while the person has it open (this tab only: a new launch starts closed)
 
 type Props = { mode?: "memory" | "database" | "down"; user?: { name: string; admin: boolean; perms: string[] } | null; badges?: Record<string, number>; version?: string };
 
@@ -16,12 +16,12 @@ type Props = { mode?: "memory" | "database" | "down"; user?: { name: string; adm
 // On a phone there is no sidebar: a top bar with the same icon opens the menu over the page.
 export function Nav({ mode = "memory", user = null, badges = {}, version = "" }: Props) {
   const path = usePathname();
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false); // closed when the app starts, until it is opened
   const [drawer, setDrawer] = useState(false);
-  useEffect(() => { try { if (localStorage.getItem(KEY) === "0") setOpen(false); } catch { /* private window */ } }, []);
+  useEffect(() => { try { if (sessionStorage.getItem(KEY) === "1") setOpen(true); } catch { /* private window */ } }, []);
   useEffect(() => { setDrawer(false); }, [path]);
   if (path === "/login" || !user) return null;
-  const toggle = () => setOpen((v) => { try { localStorage.setItem(KEY, v ? "0" : "1"); } catch { /* ignore */ } return !v; });
+  const toggle = () => setOpen((v) => { try { sessionStorage.setItem(KEY, v ? "0" : "1"); } catch { /* ignore */ } return !v; });
 
   const SECTIONS = visibleSections(user);
   const here = locate(path);

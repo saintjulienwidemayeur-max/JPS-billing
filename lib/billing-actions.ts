@@ -2,6 +2,7 @@
 import { redirect } from "next/navigation";
 import { db, nowStr, balance, money, wrCode, r2, findCustomer, newCustomer, repOf, timeNow, creditOf, custOf, newOrderId, orderBalance, ORDER_FEE_PCT, ORDER_STATUSES, type Order, type OrderStatus, remember as rememberName, billBalance } from "./wh-store";
 import { act } from "./act";
+import { queueMail, emailInvoice } from "./auto-mail";
 import { usToIso, isoToUs } from "./clock";
 
 // The billing app's actions: invoices, payments, credit and purchase orders. Every one goes through act(): loaded, signed in, logged, saved.
@@ -19,7 +20,7 @@ export const createInvoice = act("createInvoice", async (f: F) => {
   const w = db.wrs.find((x) => x.id === s(f, "wr"));
   if (!w) return;
   if (!w.pieces.length) back("/invoices/new", { err: "Add at least one piece to the receipt (in the warehouse app) before invoicing." });
-  if (!w.invoice) { w.invoice = `INV-${db.n.inv++}`; w.invoiceDate = nowStr(); }
+  if (!w.invoice) { w.invoice = `INV-${db.n.inv++}`; w.invoiceDate = nowStr(); queueMail(() => emailInvoice(w)); } // the invoice (PDF) is e-mailed by itself
   back(`/invoices/${w.invoice}`, { ok: `Invoice ${w.invoice} created.` });
 });
 export const addPayment = act("addPayment", async (f: F) => {
