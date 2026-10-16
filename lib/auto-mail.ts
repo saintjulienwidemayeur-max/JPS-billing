@@ -23,21 +23,23 @@ const log = (subject: string, to: string, error?: string) => {
   db.maillog.length = Math.min(db.maillog.length, 200);
 };
 
-export async function emailInvoice(w: WR): Promise<void> {
-  if (!w.invoice || w.invoiceSent) return;
+// `force` (the "Notify by e-mail" button) sends again even if it was already sent. Returns an error text, or "".
+export async function emailInvoice(w: WR, force = false): Promise<string> {
+  if (!w.invoice || (w.invoiceSent && !force)) return "";
   const tries = (w.invoiceMail?.tries ?? 0) + 1;
   const fail = (e: string, again: boolean) => { w.invoiceMail = { error: e, tries: again ? tries : 99, at: `${nowStr()} ${timeNow()}` }; };
   const c = custOf(w), lang = (c?.lang === "en" || c?.lang === "es" ? c.lang : "fr") as Lang, tx = T[lang];
   const email = (c && usableEmail(c)) ?? (w.email && usableEmail({ email: w.email }) ? w.email : undefined);
   const subject = tx.subject(w.invoice);
-  if (!mailEnabled()) { const e = "E-mail is not set up (SUPABASE_URL, SITE_STAFF_EMAIL, SITE_STAFF_PASSWORD)."; log(subject, c?.name ?? w.customer, e); fail(e, false); return; }
-  if (!email) { const e = "no usable e-mail (missing, shared or company address)"; log(subject, c?.name ?? w.customer, e); fail(e, false); return; }
+  if (!mailEnabled()) { const e = "E-mail is not set up (SUPABASE_URL, SITE_STAFF_EMAIL, SITE_STAFF_PASSWORD)."; log(subject, c?.name ?? w.customer, e); fail(e, false); return e; }
+  if (!email) { const e = "no usable e-mail (missing, shared or company address)"; log(subject, c?.name ?? w.customer, e); fail(e, false); return e; }
   const pdf = await invoicePdf(w), name = `Invoice-${w.invoice}.pdf`;
   const error = await mailTo({ email, name: c?.name ?? w.customer, lang }, subject, `${tx.body(w.invoice, wrCode(w), money(total(w)), money(balance(w)))}\n\n${COMPANY.name} · ${COMPANY.phone}`, [{ name, content: Buffer.from(pdf).toString("base64") }]);
   log(subject, email, error ?? undefined);
-  if (error) { fail(error, true); return; }
+  if (error) { fail(error, true); return error; }
   await saveDoc({ kind: "invoice", ref: w.invoice, name, note: `sent to ${email}`, data: pdf });
   w.invoiceSent = nowStr(); w.invoiceMail = undefined;
+  return "";
 }
 
 // A failed send (network, the e-mail service) is tried again, up to 4 times in all; checked at most every 15 minutes (called from the layout).

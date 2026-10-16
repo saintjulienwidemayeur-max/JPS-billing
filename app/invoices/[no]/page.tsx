@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { cancelInvoice, voidPayment } from "@/lib/billing-actions";
+import { cancelInvoice, voidPayment, notifyInvoiceEmail } from "@/lib/billing-actions";
 import { listDocs } from "@/lib/persist";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { db, custOf, repOf, wrCode, total, paidAmt, balance, payStatus, money, insuranceFee, quote, r2, freightFee, freightQty, freightDesc } from "@/lib/wh-store";
@@ -39,6 +39,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
       <div className="no-print mt-3 flex flex-wrap items-center gap-2">
         <a href={`/invoices/${encodeURIComponent(w.invoice ?? "")}/pdf`} target="_blank" className="inline-flex h-9 items-center rounded-md border border-zinc-300 bg-white px-3 font-medium">Download PDF</a>
         <a href={`/payments?inv=${w.invoice}`} className="inline-flex h-9 items-center rounded-md border border-zinc-300 bg-white px-3 font-medium">Enter payment</a>
+        <form><button formAction={notifyInvoiceEmail.bind(null, w.id)} className="inline-flex h-9 items-center rounded-md border border-brand bg-brand px-3 font-medium text-white">Notify by e-mail</button></form>
         <form className="ml-auto"><button formAction={cancelInvoice.bind(null, w.id)} className="text-red-700 underline">Cancel invoice</button></form>
       </div>
       <p className={`no-print mt-2 text-xs ${w.invoiceSent ? "text-green-700" : w.invoiceMail?.error ? "text-amber-800" : "text-zinc-500"}`}>

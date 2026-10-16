@@ -195,3 +195,13 @@ export const deleteBill = act("deleteBill", async (id: string) => {
   db.payables = db.payables.filter((x) => x !== b);
   back(PB, { ok: "Bill deleted." });
 });
+
+// "Notify by e-mail" button: the invoice (PDF) goes to the customer now, even if it was already sent.
+export const notifyInvoiceEmail = act("notifyInvoiceEmail", async (wr: string) => {
+  const w = db.wrs.find((x) => x.id === wr);
+  if (!w?.invoice) return;
+  const to = `/invoices/${encodeURIComponent(w.invoice)}`;
+  const err = await emailInvoice(w, true);
+  if (err) back(to, { err: `Not sent: ${err}` });
+  back(to, { ok: "Invoice e-mailed to the customer." });
+});
