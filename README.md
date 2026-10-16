@@ -23,3 +23,6 @@ New Web Service from this repo: Build `yarn install && yarn build`, Start `yarn 
 
 ## Without a database
 With no `DATABASE_URL` everything lives in memory and resets when the server restarts (only for trying it out).
+
+## PWA
+The app installs like an app (Chrome/Edge: "Install the app" in the menu; phone: Add to Home Screen): `app/manifest.ts`, `public/sw.js` (keeps only static files, never pages or data), `public/offline.html`, icons in `public/icons/`.
