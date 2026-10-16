@@ -1,0 +1,87 @@
+import Link from "next/link";
+import { ArrowRight, Banknote, FilePlus2, CalendarDays, Users, Zap } from "lucide-react";
+import { visibleSections } from "@/lib/menu";
+import { requireUser } from "@/lib/users";
+import { allowed } from "@/lib/access";
+import { tryLoaded } from "@/lib/persist";
+import { menuBadges, owed } from "@/lib/badges";
+import { money, db, billBalance, r2 } from "@/lib/wh-store";
+import { allPayments } from "@/lib/paylist";
+import { usToday } from "@/lib/clock";
+
+export const metadata = { title: "Main menu · JP's Logistics" };
+export const dynamic = "force-dynamic";
+
+const card = "rounded-xl border border-[#dfe4f0] bg-white shadow-sm";
+const ALL_QUICK = [
+  { href: "/payments", label: "Enter a payment", icon: Banknote },
+  { href: "/invoices/new", label: "Make an invoice", icon: FilePlus2 },
+  { href: "/customers", label: "Find a customer", icon: Users },
+  { href: "/reports/daily", label: "Today's payment report", icon: CalendarDays },
+];
+
+export default async function Home({ searchParams }: { searchParams: Promise<{ denied?: string }> }) {
+  const me = await requireUser();
+  await tryLoaded();
+  const SECTIONS = visibleSections(me), denied = (await searchParams).denied;
+  const b = menuBadges();
+  const QUICK = ALL_QUICK.filter((q) => allowed(me, q.href));
+  const today = usToday(), todays = r2(allPayments().filter((x) => x.p.date === today).reduce((a, x) => a + x.p.amount, 0));
+  const stats = [
+    { href: "/invoices", n: money(owed()), label: `Owed on ${b["/invoices"] ?? 0} open invoice${b["/invoices"] === 1 ? "" : "s"}` },
+    { href: "/reports/daily", n: money(todays), label: "Received today" },
+    { href: "/orders", n: String(b["/orders"] ?? 0), label: "Orders not paid" },
+    { href: "/payables", n: money(r2(db.payables.reduce((a, x) => a + Math.max(0, billBalance(x)), 0))), label: `To pay on ${b["/payables"] ?? 0} bill${b["/payables"] === 1 ? "" : "s"}` },
+  ];
+  return (
+    <main className="mx-auto max-w-6xl px-4 py-8">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div><h1>Main menu</h1><p className="text-sm text-zinc-600">JP&apos;s Logistics &amp; More · Billing</p></div>
+        <p className="text-sm text-zinc-500">{usToday()}</p>
+      </div>
+
+      {denied && <p role="alert" className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">You do not have access to that page. Ask the administrator.</p>}
+      <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {stats.filter((s) => allowed(me, s.href)).map((s) => (
+          <Link key={s.label} href={s.href} className={`${card} px-4 py-3 transition hover:border-brand hover:shadow-md`}>
+            <div className="text-2xl font-extrabold text-brand">{s.n}</div>
+            <div className="mt-0.5 text-xs text-zinc-600">{s.label}</div>
+          </Link>))}
+      </div>
+
+      <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {SECTIONS.map((s) => (
+          <section key={s.slug} className={`${card} flex flex-col p-5`}>
+            <div className="flex items-start gap-3">
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand text-white"><s.icon size={22} aria-hidden /></span>
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold leading-tight text-zinc-900"><Link href={`/menu/${s.slug}`} className="hover:text-brand">{s.title}</Link></h2>
+                <p className="text-xs text-zinc-600">{s.blurb}</p>
+              </div>
+            </div>
+            <ul className="mt-4 flex flex-1 flex-col gap-1">
+              {s.pages.map((p) => (
+                <li key={p.href}>
+                  <Link href={p.href} className="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-zinc-800 transition hover:bg-[#eaeefb] hover:text-brand">
+                    <p.icon size={16} className="shrink-0 text-brand" aria-hidden /> <span className="flex-1">{p.label}</span>
+                    {b[p.href] ? <span className="rounded-full bg-brand px-2 py-0.5 text-[11px] font-semibold leading-none text-white">{b[p.href]}</span> : null}
+                  </Link>
+                </li>))}
+            </ul>
+            <Link href={`/menu/${s.slug}`} className="mt-3 flex items-center gap-1 border-t border-[#eef1f8] pt-3 text-sm font-semibold text-brand hover:underline">Open the section <ArrowRight size={15} aria-hidden /></Link>
+          </section>
+        ))}
+        <section className={`${card} flex flex-col p-5`}>
+          <div className="flex items-start gap-3">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[#eaeefb] text-brand"><Zap size={22} aria-hidden /></span>
+            <div><h2 className="text-lg font-bold leading-tight text-zinc-900">Quick start</h2><p className="text-xs text-zinc-600">The things done all day</p></div>
+          </div>
+          <ul className="mt-4 flex flex-col gap-1">
+            {QUICK.map((q) => (
+              <li key={q.href}><Link href={q.href} className="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-zinc-800 transition hover:bg-[#eaeefb] hover:text-brand"><q.icon size={16} className="shrink-0 text-brand" aria-hidden /> {q.label}</Link></li>))}
+          </ul>
+        </section>
+      </div>
+    </main>
+  );
+}
