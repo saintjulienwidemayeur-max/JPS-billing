@@ -1,7 +1,8 @@
 "use server";
 import { redirect } from "next/navigation";
-import { db, nowStr, balance, money, wrCode, r2, findCustomer, newCustomer, repOf, timeNow, creditOf, custOf, newOrderId, orderBalance, ORDER_FEE_PCT, ORDER_STATUSES, type Order, type OrderStatus, remember as rememberName, billBalance } from "./wh-store";
+import { db, nowStr, balance, money, wrCode, r2, findCustomer, newCustomer, repOf, timeNow, creditOf, custOf, newOrderId, orderBalance, ORDER_FEE_PCT, ORDER_STATUSES, type Order, type OrderStatus, remember as rememberName, billBalance, type Expense } from "./wh-store";
 import { act } from "./act";
+import { requireUser } from "./users";
 import { queueMail, emailInvoice } from "./auto-mail";
 import { usToIso, isoToUs } from "./clock";
 
@@ -174,7 +175,7 @@ export const addBill = act("addBill", async (f: F) => {
   if (!vendor || vendor.length > 80) back(PB, { err: "Enter who the bill is from." });
   if (!Number.isFinite(amount) || amount <= 0 || amount > 10_000_000) back(PB, { err: "Enter the amount of the bill (more than 0)." });
   const date = s(f, "date") ? isoToUs(s(f, "date")) : nowStr(), due = s(f, "due") ? isoToUs(s(f, "due")) : date;
-  db.payables.unshift({ id: `B-${db.n.bill++}`, vendor, ref: s(f, "ref"), date, due, amount: r2(amount), category: s(f, "category") || "Other", notes: s(f, "notes"), payments: [] });
+  db.payables.unshift({ id: `B-${db.n.bill++}`, vendor, ref: s(f, "ref"), date, due, amount: r2(amount), category: s(f, "category") || "Other", notes: s(f, "notes"), payments: [], ...(s(f, "shipment") && db.shipments.some((x) => x.name === s(f, "shipment")) && { shipment: s(f, "shipment") }) });
   back(PB, { ok: `Bill from ${vendor} added.` });
 });
 export const payBill = act("payBill", async (f: F) => {
@@ -204,4 +205,23 @@ export const notifyInvoiceEmail = act("notifyInvoiceEmail", async (wr: string) =
   const err = await emailInvoice(w, true);
   if (err) back(to, { err: `Not sent: ${err}` });
   back(to, { ok: "Invoice e-mailed to the customer." });
+});
+
+// ---------- Expenses: for a cargo (shipment) or the small everyday ones ----------
+const EX = "/expenses";
+export const addExpense = act("addExpense", async (f: F) => {
+  const who = (await requireUser()).name, amount = num(f, "amount"), shipment = s(f, "shipment"), category = s(f, "category");
+  if (!Number.isFinite(amount) || amount <= 0 || amount > 10_000_000) back(EX, { err: "Enter the amount (more than 0)." });
+  if (!category || category.length > 40) back(EX, { err: "Choose what it was for (category)." });
+  if (shipment && !db.shipments.some((x) => x.name === shipment)) back(EX, { err: "That cargo does not exist." });
+  const date = s(f, "date") ? isoToUs(s(f, "date")) : nowStr();
+  const e: Expense = { id: `X${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, date, amount: r2(amount), category, payee: s(f, "payee").slice(0, 80), method: s(f, "method").slice(0, 30), notes: s(f, "notes").slice(0, 200), by: who ?? "", ...(shipment && { shipment }) };
+  db.expenses.unshift(e);
+  if (e.method) rememberName(db.payMethods, e.method);
+  back(EX, { ok: `Expense of ${money(e.amount)} saved${shipment ? ` for cargo ${shipment}` : " (everyday)"}.`, ...(shipment && { view: shipment }) });
+});
+export const deleteExpense = act("deleteExpense", async (id: string) => {
+  const before = db.expenses.length;
+  db.expenses = db.expenses.filter((x) => x.id !== id);
+  back(EX, { ok: before > db.expenses.length ? "Expense deleted." : "Already deleted." });
 });

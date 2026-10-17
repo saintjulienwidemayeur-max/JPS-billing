@@ -108,7 +108,7 @@ export type Settings = { storageFreeDays: number; storageFee: number };
 export const DEFAULT_SETTINGS: Settings = { storageFreeDays: 30, storageFee: 10 };
 const today = () => usToday();
 type WhDb = {
-  items: Item[]; wrs: WR[]; loads: Load[]; shipments: Shipment[]; bookings: Booking[]; orders: Order[]; pickups: Pickup[]; prealerts: Prealert[]; users: User[]; maillog: MailLog[]; audit: AuditEntry[]; oldInvoices: OldInvoice[]; payables: Bill[]; blockedEmails: string[]; customers: Customer[]; reps: Rep[];
+  items: Item[]; wrs: WR[]; loads: Load[]; shipments: Shipment[]; bookings: Booking[]; orders: Order[]; pickups: Pickup[]; prealerts: Prealert[]; users: User[]; maillog: MailLog[]; audit: AuditEntry[]; oldInvoices: OldInvoice[]; payables: Bill[]; expenses: Expense[]; blockedEmails: string[]; customers: Customer[]; reps: Rep[];
   feeNames: { charge: string[]; credit: string[] }; payMethods: string[]; carriers: string[]; settings: Settings;
   n: { wr: number; piece: number; item: number; cargo: number; inv: number; batch: number; cust: number; rep: number; fee: number; pay: number; pickup: number; prealert: number; mail: number; user: number; audit: number; bill: number };
 };
@@ -118,7 +118,7 @@ export const db: WhDb = (g.__wh13 ??= {
     { id: 1, date: today(), carrier: "AMAZON", tracking: "TBA334984152752", receiver: "Demo", batch: "0" },
     { id: 2, date: today(), carrier: "FEDEX", tracking: "962200190000033194400087790594477", receiver: "Demo", batch: "0" },
   ],
-  wrs: [], loads: [], shipments: [], bookings: [], orders: [], pickups: [], prealerts: [], users: [], maillog: [], audit: [], oldInvoices: [], payables: [], blockedEmails: [...BLOCKED_EMAILS], customers: [], reps: [],
+  wrs: [], loads: [], shipments: [], bookings: [], orders: [], pickups: [], prealerts: [], users: [], maillog: [], audit: [], oldInvoices: [], payables: [], expenses: [], blockedEmails: [...BLOCKED_EMAILS], customers: [], reps: [],
   feeNames: { charge: [...FEE_PRESETS], credit: [...CREDIT_PRESETS] }, payMethods: [...PAY_METHODS], carriers: [...CARRIERS], settings: { ...DEFAULT_SETTINGS },
   n: { wr: 11018, piece: 20032, item: 3, cargo: 611, inv: 5001, batch: 1, cust: 1001, rep: 1, fee: 1, pay: 1001, pickup: 1, prealert: 1, mail: 1, user: 1, audit: 1, bill: 1 },
 });
@@ -260,10 +260,15 @@ export type OldScan = { t: string; date: string; carrier: string; ship: string; 
 export type OldWR = { wr: string; date: string; shipper: string; billTo: number; cust: number; ship: string; kind: string; handling: number; other: number; credit: number; paid: number; method: string; contents: string; comments: string; invoiced: boolean; paidFull: boolean; pieces: OldPiece[]; scans: OldScan[]; ships: string[] };
 export type OldShip = { id: string; type: string; name: string; awb: string; bol: string; date: string; sail: string; arrival: string; container: string; line: string; vessel: string; pieces: number; cost: number; shipper: string; consignee: string; items: number[] };
 // A bill JP's has to pay (a supplier, the carrier, rent...). Payables: what is due, what was paid.
-export type Bill = { id: string; vendor: string; ref: string; date: string; due: string; amount: number; category: string; notes: string; payments: Payment[] };
+export type Bill = { id: string; vendor: string; ref: string; date: string; due: string; amount: number; category: string; notes: string; payments: Payment[]; shipment?: string };
 export const billPaid = (b: Bill) => r2(b.payments.reduce((a, p) => a + p.amount, 0));
 export const billBalance = (b: Bill) => r2(b.amount - billPaid(b));
 export const BILL_CATEGORIES = ["Airline / cargo", "Ocean freight", "Customs & duties", "Rent & utilities", "Salaries", "Supplies", "Fuel & transport", "Other"];
+// An expense JP's paid: for one cargo (shipment) or a small everyday one (`shipment` empty).
+export type Expense = { id: string; date: string; amount: number; category: string; shipment?: string; payee: string; method: string; notes: string; by: string };
+export const CARGO_EXPENSE_CATEGORIES = ["Airline / freight", "Ocean freight", "Customs & duties", "Pallets & wrapping", "Truck / delivery", "Labor", "Insurance", "Other (cargo)"];
+export const DAILY_EXPENSE_CATEGORIES = ["Fuel", "Meals", "Supplies", "Packing material", "Transport / taxi", "Repairs", "Cleaning", "Phone & internet", "Office", "Other (daily)"];
+export const expenseOf = (shipment: string) => r2(db.expenses.filter((e) => e.shipment === shipment).reduce((a, e) => a + e.amount, 0) + db.payables.filter((b) => b.shipment === shipment).reduce((a, b) => a + b.amount, 0));
 export type MailLog = { id: number; date: string; time: string; by: string; subject: string; to: string; sent: number; total: number; failed: string[] };
 
 // ---------- Pre-alerts ----------

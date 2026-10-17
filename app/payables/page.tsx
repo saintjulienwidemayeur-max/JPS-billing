@@ -34,7 +34,8 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
         <F label="Amount ($)"><Input name="amount" type="number" step="0.01" min="0.01" required className="text-right" /></F>
         <F label="Bill date"><Input name="date" type="date" defaultValue={today} /></F>
         <F label="Due date"><Input name="due" type="date" defaultValue={today} /></F>
-        <F label="Notes" span="sm:col-span-2"><Input name="notes" maxLength={200} /></F>
+        <F label="For a cargo (optional)"><select name="shipment" className="h-9 rounded-md border bg-white px-2 text-sm"><option value="">No cargo</option>{[...db.shipments].reverse().map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}</select></F>
+        <F label="Notes"><Input name="notes" maxLength={200} /></F>
         <div className="sm:col-span-4"><Button type="submit">Add the bill</Button></div>
       </form>
 
@@ -42,7 +43,7 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
       {open.length === 0 ? <p className="mt-1 text-zinc-600">Nothing to pay.</p> : (
         <table className="mt-2 w-full text-left"><thead><tr>{["Due", "From", "Category", "Bill", "Amount", "Balance", "Pay"].map((h, i) => <th key={i} className={th}>{h}</th>)}</tr></thead>
           <tbody>{open.map((b) => (
-            <tr key={b.id} className="border-b border-zinc-100 align-top"><td className={`${td} whitespace-nowrap ${usToIso(b.due) < today ? "font-semibold text-red-700" : ""}`}>{b.due}</td><td className={td}>{b.vendor}{b.notes && <span className="block text-xs text-zinc-500">{b.notes}</span>}</td><td className={td}>{b.category}</td><td className={td}>{b.ref || b.id}</td><td className={td}>{money(b.amount)}</td><td className={`${td} font-medium`}>{money(billBalance(b))}</td>
+            <tr key={b.id} className="border-b border-zinc-100 align-top"><td className={`${td} whitespace-nowrap ${usToIso(b.due) < today ? "font-semibold text-red-700" : ""}`}>{b.due}</td><td className={td}>{b.vendor}{b.shipment && <span className="block text-xs text-zinc-500">Cargo {b.shipment}</span>}{b.notes && <span className="block text-xs text-zinc-500">{b.notes}</span>}</td><td className={td}>{b.category}</td><td className={td}>{b.ref || b.id}</td><td className={td}>{money(b.amount)}</td><td className={`${td} font-medium`}>{money(billBalance(b))}</td>
               <td className={td}><form action={payBill} className="flex gap-1"><input type="hidden" name="id" value={b.id} /><Input name="amount" type="number" step="0.01" min="0.01" max={billBalance(b)} defaultValue={billBalance(b)} className="w-24 text-right" aria-label="Amount" /><Input name="method" list="payMethods" placeholder="Paid by" className="w-28" required aria-label="Paid by" /><Button type="submit" variant="outline">Pay</Button></form>
                 {b.payments.length === 0 && <form action={deleteBill.bind(null, b.id)}><button className="mt-1 text-xs text-red-700 underline">Delete</button></form>}</td></tr>))}</tbody></table>
       )}
