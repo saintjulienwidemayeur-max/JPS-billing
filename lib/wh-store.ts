@@ -108,7 +108,7 @@ export type Settings = { storageFreeDays: number; storageFee: number; rates?: Re
 export const DEFAULT_SETTINGS: Settings = { storageFreeDays: 30, storageFee: 10 };
 const today = () => usToday();
 type WhDb = {
-  items: Item[]; wrs: WR[]; loads: Load[]; shipments: Shipment[]; bookings: Booking[]; orders: Order[]; pickups: Pickup[]; prealerts: Prealert[]; users: User[]; maillog: MailLog[]; audit: AuditEntry[]; oldInvoices: OldInvoice[]; payables: Bill[]; expenses: Expense[]; blockedEmails: string[]; customers: Customer[]; reps: Rep[];
+  items: Item[]; wrs: WR[]; loads: Load[]; shipments: Shipment[]; bookings: Booking[]; orders: Order[]; pickups: Pickup[]; prealerts: Prealert[]; users: User[]; maillog: MailLog[]; audit: AuditEntry[]; oldInvoices: OldInvoice[]; payables: Bill[]; expenses: Expense[]; debts: Debt[]; blockedEmails: string[]; customers: Customer[]; reps: Rep[];
   feeNames: { charge: string[]; credit: string[] }; payMethods: string[]; carriers: string[]; settings: Settings;
   n: { wr: number; piece: number; item: number; cargo: number; inv: number; batch: number; cust: number; rep: number; fee: number; pay: number; pickup: number; prealert: number; mail: number; user: number; audit: number; bill: number };
 };
@@ -118,7 +118,7 @@ export const db: WhDb = (g.__wh13 ??= {
     { id: 1, date: today(), carrier: "AMAZON", tracking: "TBA334984152752", receiver: "Demo", batch: "0" },
     { id: 2, date: today(), carrier: "FEDEX", tracking: "962200190000033194400087790594477", receiver: "Demo", batch: "0" },
   ],
-  wrs: [], loads: [], shipments: [], bookings: [], orders: [], pickups: [], prealerts: [], users: [], maillog: [], audit: [], oldInvoices: [], payables: [], expenses: [], blockedEmails: [...BLOCKED_EMAILS], customers: [], reps: [],
+  wrs: [], loads: [], shipments: [], bookings: [], orders: [], pickups: [], prealerts: [], users: [], maillog: [], audit: [], oldInvoices: [], payables: [], expenses: [], debts: [], blockedEmails: [...BLOCKED_EMAILS], customers: [], reps: [],
   feeNames: { charge: [...FEE_PRESETS], credit: [...CREDIT_PRESETS] }, payMethods: [...PAY_METHODS], carriers: [...CARRIERS], settings: { ...DEFAULT_SETTINGS },
   n: { wr: 11018, piece: 20032, item: 3, cargo: 611, inv: 5001, batch: 1, cust: 1001, rep: 1, fee: 1, pay: 1001, pickup: 1, prealert: 1, mail: 1, user: 1, audit: 1, bill: 1 },
 });
@@ -287,6 +287,11 @@ export const pickupFeeLine = (p: Pickup) => db.wrs.find((w) => w.id === p.wr)?.f
 export const pickupPrice = (p: Pickup) => (p.status === "Cancelled" ? 0 : pickupFeeLine(p)?.amount ?? p.price);
 
 // ---------- Purchase orders ----------
+// A balance a customer owes that is on no invoice and no order (a previous balance, an old debt...). It is paid in parts: what is not paid stays as the balance.
+export type Debt = { id: string; cust: number; customer: string; rep: string; date: string; amount: number; note: string; payments: Payment[] };
+export const debtPaid = (d: Debt) => r2(d.payments.reduce((a, p) => a + p.amount, 0));
+export const debtBalance = (d: Debt) => r2(d.amount - debtPaid(d));
+export const debtsOwed = (cust: number) => r2(db.debts.filter((d) => d.cust === cust).reduce((a, d) => a + Math.max(0, debtBalance(d)), 0));
 export const ORDER_FEE_PCT = 15;
 export const orderLine = (i: OrderItem) => r2(i.qty * i.unit);
 export const orderSubtotal = (o: Order) => r2(o.items.reduce((a, i) => a + orderLine(i), 0));

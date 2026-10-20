@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { db, wrCode, total, paidAmt, balance, money, r2, creditOf, orderTotal, orderPaid, orderBalance } from "@/lib/wh-store";
+import { db, wrCode, total, paidAmt, balance, money, r2, creditOf, orderTotal, orderPaid, orderBalance, debtBalance, debtPaid } from "@/lib/wh-store";
 import { usToday, daysSince } from "@/lib/clock";
 import { PrintButton } from "@/components/print-button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,8 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   const rows = db.wrs.filter((w) => w.cust === c.no && (w.fees.length > 0 || w.payments.length > 0) && (!q.from || key(w.date) >= q.from) && (!q.to || key(w.date) <= q.to) && (q.show !== "open" || balance(w) > 0))
     .sort((a, b) => key(a.date).localeCompare(key(b.date)) || Number(a.id) - Number(b.id));
   const orders = db.orders.filter((o) => o.cust === c.no && (!q.from || key(o.date) >= q.from) && (!q.to || key(o.date) <= q.to) && (q.show !== "open" || orderBalance(o) > 0));
-  const billed = r2(rows.reduce((a, w) => a + total(w), 0) + orders.reduce((a, o) => a + orderTotal(o), 0)), paid = r2(rows.reduce((a, w) => a + paidAmt(w), 0) + orders.reduce((a, o) => a + orderPaid(o), 0));
+  const debts = db.debts.filter((d) => d.cust === c.no && (!q.from || key(d.date) >= q.from) && (!q.to || key(d.date) <= q.to) && (q.show !== "open" || debtBalance(d) > 0));
+  const billed = r2(rows.reduce((a, w) => a + total(w), 0) + orders.reduce((a, o) => a + orderTotal(o), 0) + debts.reduce((a, d) => a + d.amount, 0)), paid = r2(rows.reduce((a, w) => a + paidAmt(w), 0) + orders.reduce((a, o) => a + orderPaid(o), 0) + debts.reduce((a, d) => a + debtPaid(d), 0));
   return (
     <main className="mx-auto max-w-4xl px-4 py-6 text-sm">
       <div className="flex items-start justify-between gap-4">
@@ -33,7 +34,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
         <Button type="submit" variant="outline">Filter</Button>
         <Link href={`/customers/${c.no}`} className="text-brand underline">Back to customer</Link>
       </form>
-      {rows.length === 0 && orders.length === 0 ? <p className="mt-6 text-zinc-600">Nothing to show.</p> : (
+      {rows.length === 0 && orders.length === 0 && debts.length === 0 ? <p className="mt-6 text-zinc-600">Nothing to show.</p> : (
         <table className="mt-4 w-full text-left">
           <thead className="border-b-2 border-black"><tr>{["Date", "Receipt", "Invoice", "Total", "Paid", "Balance"].map((h, i) => <th key={h} className={`${th} ${i > 2 ? "text-right" : ""}`}>{h}</th>)}</tr></thead>
           <tbody>{rows.flatMap((w) => [
@@ -43,6 +44,10 @@ export default async function Page({ params, searchParams }: { params: Promise<{
           {orders.length > 0 && <tbody>{orders.flatMap((o) => [
             <tr key={o.id} className="border-t border-zinc-300"><td className={td}>{o.date}</td><td className={td}>Order #{o.id}</td><td className={td}>–</td><td className={`${td} text-right`}>{money(orderTotal(o))}</td><td className={`${td} text-right`}>{money(orderPaid(o))}</td><td className={`${td} text-right font-medium`}>{money(orderBalance(o))}</td></tr>,
             ...o.payments.map((p, i) => <tr key={`${o.id}-${i}`} className="text-xs text-zinc-600"><td className={`${td} pl-6`}>{p.date}</td><td className={td} colSpan={2}>Payment: {p.method}{p.ref && ` · ${p.ref}`}</td><td className={td} /><td className={`${td} text-right`}>{money(p.amount)}</td><td className={td} /></tr>),
+          ])}</tbody>}
+          {debts.length > 0 && <tbody>{debts.flatMap((d) => [
+            <tr key={d.id} className="border-t border-zinc-300"><td className={td}>{d.date}</td><td className={td}>Account balance: {d.note}</td><td className={td}>–</td><td className={`${td} text-right`}>{money(d.amount)}</td><td className={`${td} text-right`}>{money(debtPaid(d))}</td><td className={`${td} text-right font-medium`}>{money(debtBalance(d))}</td></tr>,
+            ...d.payments.map((p, i) => <tr key={`${d.id}-${i}`} className="text-xs text-zinc-600"><td className={`${td} pl-6`}>{p.date}</td><td className={td} colSpan={2}>Payment: {p.method}{p.ref && ` · ${p.ref}`}</td><td className={td} /><td className={`${td} text-right`}>{money(p.amount)}</td><td className={td} /></tr>),
           ])}</tbody>}
           <tfoot><tr className="border-t-2 border-black font-bold"><td className={td} colSpan={3}>Total ({rows.length} receipt{rows.length === 1 ? "" : "s"}{orders.length > 0 && `, ${orders.length} order${orders.length === 1 ? "" : "s"}`})</td><td className={`${td} text-right`}>{money(billed)}</td><td className={`${td} text-right`}>{money(paid)}</td><td className={`${td} text-right`}>{money(r2(billed - paid))}</td></tr></tfoot>
         </table>

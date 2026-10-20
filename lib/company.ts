@@ -30,3 +30,12 @@ export const COMPANY_EMAILS = ["jpslogisticsmiami@gmail.com", "jpslogisticshaiti
 // Addresses shared by many customers (several accounts of one company, or a placeholder): nothing is e-mailed there until the customers
 // get a real address of their own. The administrator can add or remove addresses (Administration > Email customers).
 export const BLOCKED_EMAILS = ["alainnonez@yahoo.com", "hantzjr.b@boulosdistribution.com", "romarmultiservices@gmail.com", "ramses60@aol.com"];
+
+// How customers pay: printed in the e-mail that goes with an invoice or an order.
+export const PAY = {
+  checkTo: "JPA LOGISTICS",
+  haiti: { bank: "CAPITAL BANQUE", kind: "COMPTE COURANT", name: "JPA LOGISTIQUE", gourdes: "1856676", usd: "1856677" },
+  zelle: "(786) 424-8025",
+  us: { name: "JP's Logistics and More LLC", bank: "Bank of America", routing: "26009593", swift: "BOFAUS3M", account: "229058052645" },
+  address: ["8125 NW 67e Rue", "Miami, Floride 33166"], addressEn: ["8125 NW 67th Street", "Miami, FL 33166"], phone: "+1 (786) 424-8025",
+};

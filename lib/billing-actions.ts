@@ -1,9 +1,9 @@
 "use server";
 import { redirect } from "next/navigation";
-import { db, nowStr, balance, money, wrCode, r2, findCustomer, newCustomer, repOf, timeNow, creditOf, custOf, newOrderId, orderBalance, ORDER_FEE_PCT, ORDER_STATUSES, type Order, type OrderStatus, remember as rememberName, billBalance, type Expense } from "./wh-store";
+import { db, nowStr, balance, money, wrCode, r2, findCustomer, newCustomer, repOf, timeNow, creditOf, custOf, newOrderId, orderBalance, ORDER_FEE_PCT, ORDER_STATUSES, type Order, type OrderStatus, remember as rememberName, billBalance, debtBalance, type Debt, type Expense } from "./wh-store";
 import { act } from "./act";
 import { requireUser } from "./users";
-import { queueMail, emailInvoice } from "./auto-mail";
+import { queueMail, emailInvoice, emailOrder } from "./auto-mail";
 import { usToIso, isoToUs } from "./clock";
 
 // The billing app's actions: invoices, payments, credit and purchase orders. Every one goes through act(): loaded, signed in, logged, saved.
@@ -58,12 +58,16 @@ export const receivePayment = act("receivePayment", async (f: F) => {
   if (!method || method.length > 30) back(here, { err: "Choose how the customer paid (or type a new payment method)." });
   const batch = `PAY-${db.n.pay++}`, date = nowStr(), time = timeNow();
   let left = r2(amount);
-  const open = db.wrs.filter((w) => w.cust === c!.no && w.fees.length > 0 && balance(w) > 0)
-    .sort((a, b) => usToIso(a.date).localeCompare(usToIso(b.date)) || Number(a.id) - Number(b.id));
-  for (const w of open) {
-    const take = Math.min(left, balance(w));
+  // Receipts with a balance and the balances that are on no invoice (account balances): all paid oldest first.
+  type Item = { date: string; id: string; w?: (typeof db.wrs)[number]; d?: Debt };
+  const items: Item[] = [
+    ...db.wrs.filter((w) => w.cust === c!.no && w.fees.length > 0 && balance(w) > 0).map((w) => ({ date: w.date, id: w.id, w })),
+    ...db.debts.filter((d) => d.cust === c!.no && debtBalance(d) > 0).map((d) => ({ date: d.date, id: d.id, d })),
+  ].sort((a, b) => usToIso(a.date).localeCompare(usToIso(b.date)) || a.id.localeCompare(b.id, undefined, { numeric: true }));
+  for (const it of items) {
+    const take = Math.min(left, it.w ? balance(it.w) : debtBalance(it.d!));
     if (take <= 0) break;
-    w.payments.push({ date, time, amount: r2(take), method, ref, batch });
+    (it.w ?? it.d!).payments.push({ date, time, amount: r2(take), method, ref, batch });
     left = r2(left - take);
   }
   if (left > 0) (c!.creditLog ??= []).push({ date, time, amount: left, note: `Paid more than owed (${method})`, batch, method, ref });
@@ -224,4 +228,44 @@ export const deleteExpense = act("deleteExpense", async (id: string) => {
   const before = db.expenses.length;
   db.expenses = db.expenses.filter((x) => x.id !== id);
   back(EX, { ok: before > db.expenses.length ? "Expense deleted." : "Already deleted." });
+});
+
+// ---------- Account balance: what a customer owes that is on no invoice ----------
+export const addDebt = act("addDebt", async (f: F) => {
+  const c = db.customers.find((x) => x.no === num(f, "cust"));
+  if (!c) back("/customers", { err: "Choose the customer." });
+  const here = `/customers/${c!.no}`, amount = num(f, "amount"), note = s(f, "note");
+  if (!Number.isFinite(amount) || amount <= 0 || amount > 10_000_000) back(here, { err: "Enter the amount owed (more than 0)." });
+  if (!note || note.length > 120) back(here, { err: "Say what it is for (a few words)." });
+  const id = `D-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 4)}`.toUpperCase();
+  db.debts.unshift({ id, cust: c!.no, customer: c!.name, rep: c!.rep, date: s(f, "date") ? isoToUs(s(f, "date")) : nowStr(), amount: r2(amount), note, payments: [] });
+  back(here, { ok: `Account balance of ${money(r2(amount))} added.` });
+});
+export const payDebt = act("payDebt", async (f: F) => {
+  const d = db.debts.find((x) => x.id === s(f, "id"));
+  if (!d) return;
+  const here = `/customers/${d.cust}`, amount = num(f, "amount"), method = s(f, "method");
+  if (!Number.isFinite(amount) || amount <= 0) back(here, { err: "Enter the amount paid (more than 0)." });
+  if (amount > debtBalance(d) + 0.001) back(here, { err: `That is more than the balance of ${money(debtBalance(d))}.` });
+  if (!method || method.length > 30) back(here, { err: "Choose how the customer paid (or type a new payment method)." });
+  const batch = `PAY-${db.n.pay++}`;
+  d.payments.push({ date: nowStr(), time: timeNow(), amount: r2(amount), method, ref: s(f, "ref"), batch });
+  rememberName(db.payMethods, method);
+  back(`${PY}/${batch}`);
+});
+export const deleteDebt = act("deleteDebt", async (id: string) => {
+  const d = db.debts.find((x) => x.id === id);
+  if (!d) return;
+  if (d.payments.length) back(`/customers/${d.cust}`, { err: "This balance has payments: it cannot be deleted." });
+  db.debts = db.debts.filter((x) => x !== d);
+  back(`/customers/${d.cust}`, { ok: "Account balance deleted." });
+});
+
+// "Notify by e-mail" on an order: the order's invoice (PDF) goes to the customer now.
+export const notifyOrderEmail = act("notifyOrderEmail", async (id: string) => {
+  const o = db.orders.find((x) => x.id === id);
+  if (!o) return;
+  const to = `/orders/${o.id}`, err = await emailOrder(o);
+  if (err) back(to, { err: `Not sent: ${err}` });
+  back(to, { ok: "Order invoice e-mailed to the customer." });
 });

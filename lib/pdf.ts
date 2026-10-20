@@ -6,7 +6,7 @@ import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFP
 import { DISCLAIMER, ESTIMATE_NOTE } from "./disclaimer";
 import { COMPANY } from "./company";
 import { cardFees } from "./pricing";
-import { db, vol, cuft, chargeable, r2, charges, credits, quote, insuranceFee, total, paidAmt, balance, payStatus, money, wrCode, custOf, freightFee, freightQty, freightDesc, contentsOf, repOf, type WR } from "./wh-store";
+import { db, vol, cuft, chargeable, r2, charges, credits, quote, insuranceFee, total, paidAmt, balance, payStatus, money, wrCode, custOf, freightFee, freightQty, freightDesc, contentsOf, repOf, orderLine, orderSubtotal, orderFee, orderTotal, orderPaid, orderBalance, orderNotes, type WR, type Order } from "./wh-store";
 
 const MAP: Record<string, string> = { "−": "-", "–": "-", "—": "-", "·": "-", "•": "*", "‘": "'", "’": "'", "“": '"', "”": '"', "…": "...", "→": "->", "×": "x", "≥": ">=", "€": "EUR", " ": " " };
 const safe = (s: unknown) => String(s ?? "").normalize("NFC").replace(/[^\x20-\x7e¡-ÿ]/g, (c) => MAP[c] ?? (c === "\n" ? " " : "?"));
@@ -161,5 +161,24 @@ export async function invoicePdf(w: WR): Promise<Uint8Array> {
     d.para(`If paying the balance (${money(balance(w))}) by credit card: Square CC invoice ${money(card.invoice.total)} (fee ${money(card.invoice.fee)}) - card present ${money(card.present.total)} (fee ${money(card.present.fee)}) - manual ${money(card.manual.total)} (fee ${money(card.manual.fee)})`, M, CW, 8.5, { color: GREY });
   }
   d.y -= 8; d.para("Thank you for your business. Questions? Write to us or call " + COMPANY.phone + ".", M, CW, 9, { color: GREY });
+  return d.bytes();
+}
+
+// ---------- Order invoice (a purchase JP's makes for a customer) ----------
+export async function orderPdf(o: Order): Promise<Uint8Array> {
+  const d = await Doc.make(), c = db.customers.find((x) => x.no === o.cust), M = d.M, CW = d.W - 2 * M;
+  const paid = orderPaid(o), bal = orderBalance(o);
+  d.header([COMPANY.name, `${COMPANY.address}, ${COMPANY.city}`, COMPANY.phone]);
+  d.text("INVOICE", M, 22, { bold: true, color: BLUE }); d.text(o.date, 0, 11, { right: d.W - M }); d.y -= 28;
+  d.text(`Order #${o.id}`, M, 11, { bold: true }); d.y -= 22;
+  d.text(o.customer, M, 11, { bold: true }); d.y -= 14; d.text(c?.consigneeCountry || "Haiti", M, 9.5); d.y -= 22;
+  d.row([{ w: CW - 220, t: "Description" }, { w: 55, t: "Qty", right: true }, { w: 80, t: "Unit cost", right: true }, { w: 85, t: "Total", right: true }], 9, { head: true });
+  if (!o.items.length) d.row([{ w: CW, t: "No items yet." }]);
+  for (const it of o.items) d.row([{ w: CW - 220, t: it.desc }, { w: 55, t: String(it.qty), right: true }, { w: 80, t: money(it.unit), right: true }, { w: 85, t: money(orderLine(it)), right: true }], 9);
+  d.y -= 8;
+  const sums: [string, string, boolean?][] = [["Subtotal", money(orderSubtotal(o))], [`Purchasing fees (${o.feePct}%)`, money(orderFee(o))], ["Total with delivery to Miami", money(orderTotal(o)), true]];
+  if (paid > 0) sums.push(["Paid", money(paid)], [bal > 0 ? "Balance now due" : "PAID IN FULL", money(Math.max(0, bal)), true]);
+  for (const [k, v, b] of sums) { d.need(16); d.text(k, d.W - M - 230, 10, { bold: !!b }); d.text(v, 0, 10, { bold: !!b, right: d.W - M }); d.y -= 15; }
+  d.y -= 8; d.para(orderNotes(o), M, CW, 9, { color: GREY });
   return d.bytes();
 }

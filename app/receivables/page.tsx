@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { db, balance, wrCode, money, r2, repLabel, creditOf, orderBalance } from "@/lib/wh-store";
+import { db, balance, wrCode, money, r2, repLabel, creditOf, orderBalance, debtBalance } from "@/lib/wh-store";
 import { isoToday, usToIso, daysSince } from "@/lib/clock";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -16,23 +16,24 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
   const pays: Pay[] = [
     ...db.wrs.flatMap((w) => w.payments.map((p, i) => ({ customer: w.customer, rep: w.rep, label: wrCode(w), href: p.batch ? `/payments/${p.batch}` : `/receipts/${w.id}/payments/${i}`, p }))),
     ...db.orders.flatMap((o) => o.payments.map((p, i) => ({ customer: o.customer, rep: o.rep, label: `Order #${o.id}`, href: `/orders/${o.id}/payments/${i}`, p }))),
+    ...db.debts.flatMap((d) => d.payments.map((p) => ({ customer: d.customer, rep: d.rep, label: `Account balance ${d.id}`, href: p.batch ? `/payments/${p.batch}` : `/customers/${d.cust}`, p }))),
     ...db.customers.flatMap((c) => (c.creditLog ?? []).filter((e) => e.amount > 0 && e.method).map((e) => ({ customer: c.name, rep: c.rep, label: "Credit", href: `/payments/${e.batch}`, p: { date: e.date, time: e.time, amount: e.amount, method: e.method!, ref: e.ref ?? "" } }))),
   ].filter((x) => x.p.method !== "Customer credit" && usToIso(x.p.date) >= from && usToIso(x.p.date) <= to);
   const sumBy = (key: (x: Pay) => string) => { const m = new Map<string, number>(); for (const x of pays) m.set(key(x), r2((m.get(key(x)) ?? 0) + x.p.amount)); return [...m].sort((a, b) => b[1] - a[1]); };
   const collected = r2(pays.reduce((a, x) => a + x.p.amount, 0));
-  const owing = db.wrs.filter((w) => w.fees.length > 0 && balance(w) > 0);
+  const owing = db.wrs.filter((w) => w.fees.length > 0 && balance(w) > 0), owingDebts = db.debts.filter((d) => debtBalance(d) > 0);
   const buckets = [["0-30 days", 0, 30], ["31-60 days", 31, 60], ["61-90 days", 61, 90], ["Over 90 days", 91, 99999]] as const;
-  const aged = buckets.map(([label, lo, hi]) => [label, r2(owing.filter((w) => { const d = daysSince(w.date); return d >= lo && d <= hi; }).reduce((a, w) => a + balance(w), 0))] as const);
+  const aged = buckets.map(([label, lo, hi]) => [label, r2(owing.filter((w) => { const d = daysSince(w.date); return d >= lo && d <= hi; }).reduce((a, w) => a + balance(w), 0) + owingDebts.filter((x) => { const d = daysSince(x.date); return d >= lo && d <= hi; }).reduce((a, x) => a + debtBalance(x), 0))] as const);
   const owingOrders = db.orders.filter((o) => orderBalance(o) > 0);
-  const outstanding = r2(owing.reduce((a, w) => a + balance(w), 0) + owingOrders.reduce((a, o) => a + orderBalance(o), 0));
-  const debtors = [...new Map(owing.map((w) => [w.cust, w.customer])).entries()].map(([no, name]) => ({ no, name, owed: r2(owing.filter((w) => w.cust === no).reduce((a, w) => a + balance(w), 0)) })).sort((a, b) => b.owed - a.owed);
+  const outstanding = r2(owing.reduce((a, w) => a + balance(w), 0) + owingOrders.reduce((a, o) => a + orderBalance(o), 0) + owingDebts.reduce((a, d) => a + debtBalance(d), 0));
+  const debtors = [...new Map([...owing.map((w) => [w.cust, w.customer] as const), ...owingDebts.map((d) => [d.cust, d.customer] as const)]).entries()].map(([no, name]) => ({ no, name, owed: r2(owing.filter((w) => w.cust === no).reduce((a, w) => a + balance(w), 0) + owingDebts.filter((d) => d.cust === no).reduce((a, d) => a + debtBalance(d), 0)) })).sort((a, b) => b.owed - a.owed);
   const credits = r2(db.customers.reduce((a, c) => a + Math.max(0, creditOf(c)), 0));
   return (
     <main className="mx-auto max-w-5xl px-4 py-6">
       <div className="flex flex-wrap items-center justify-between gap-2"><h1>Billing</h1>
         <div className="flex gap-2"><Link href="/payments" className="inline-flex h-9 items-center rounded-md bg-brand px-4 text-sm font-medium text-white">Receive a payment</Link><Link href="/invoices" className="inline-flex h-9 items-center rounded-md border border-zinc-300 bg-white px-3 text-sm font-medium">Invoices</Link></div></div>
       <section className="mt-4 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-lg border p-3"><div className="text-xs text-zinc-500">Still owed to JP&apos;s</div><div className="text-2xl font-bold">{money(outstanding)}</div><div className="text-xs text-zinc-500">{owing.length} receipt{owing.length === 1 ? "" : "s"} · {owingOrders.length} order{owingOrders.length === 1 ? "" : "s"} not paid</div></div>
+        <div className="rounded-lg border p-3"><div className="text-xs text-zinc-500">Still owed to JP&apos;s</div><div className="text-2xl font-bold">{money(outstanding)}</div><div className="text-xs text-zinc-500">{owing.length} receipt{owing.length === 1 ? "" : "s"} · {owingOrders.length} order{owingOrders.length === 1 ? "" : "s"} · {owingDebts.length} account balance{owingDebts.length === 1 ? "" : "s"} not paid</div></div>
         <div className="rounded-lg border p-3"><div className="text-xs text-zinc-500">Collected {from} to {to}</div><div className="text-2xl font-bold">{money(collected)}</div><div className="text-xs text-zinc-500">{pays.length} payment{pays.length === 1 ? "" : "s"}</div></div>
         <div className="rounded-lg border p-3"><div className="text-xs text-zinc-500">Customer credit held</div><div className="text-2xl font-bold">{money(credits)}</div></div>
       </section>

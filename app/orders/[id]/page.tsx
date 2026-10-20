@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { db, ORDER_STATUSES, orderLine, orderSubtotal, orderFee, orderTotal, orderPaid, orderBalance, orderNotes, money } from "@/lib/wh-store";
-import { saveOrder, addOrderItem, saveOrderItems, deleteOrderItem, addOrderPayment, voidOrderPayment } from "@/lib/billing-actions";
+import { saveOrder, addOrderItem, saveOrderItems, deleteOrderItem, addOrderPayment, voidOrderPayment, notifyOrderEmail } from "@/lib/billing-actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -21,7 +21,11 @@ export default async function Page({ params, searchParams }: { params: Promise<{
       <Link href="/orders" className="text-sm text-brand underline">All orders</Link>
       <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
         <h1>Order #{o.id} · {o.customer} <span className="text-base font-normal text-zinc-600">· {o.status} · {o.date}</span></h1>
-        <Link href={`/orders/${o.id}/invoice`} className="inline-flex h-9 items-center rounded-md bg-brand px-4 text-sm font-medium text-white">View invoice</Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/orders/${o.id}/invoice`} className="inline-flex h-9 items-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium">View invoice</Link>
+          <a href={`/orders/${o.id}/pdf`} target="_blank" className="inline-flex h-9 items-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium">Download PDF</a>
+          <form><button formAction={notifyOrderEmail.bind(null, o.id)} className="inline-flex h-9 items-center rounded-md bg-brand px-4 text-sm font-medium text-white">Notify by e-mail</button></form>
+        </div>
       </div>
       {q.err && <p role="alert" className="mt-2 text-sm font-medium text-red-700">{q.err}</p>}
       {q.ok && <p className="mt-2 text-sm font-medium text-green-700">{q.ok}</p>}

@@ -7,6 +7,7 @@ export function allPayments(): Pay[] {
   return [
     ...db.wrs.flatMap((w) => w.payments.map((p, i) => ({ customer: w.customer, cust: w.cust, rep: w.rep, label: wrCode(w), href: p.batch ? `/payments/${p.batch}` : `/receipts/${w.id}/payments/${i}`, loc: w.route || "No location", p }))),
     ...db.orders.flatMap((o) => o.payments.map((p, i) => ({ customer: o.customer, cust: o.cust, rep: o.rep, label: `Order #${o.id}`, href: `/orders/${o.id}/payments/${i}`, loc: db.customers.find((c) => c.no === o.cust)?.route || "No location", p }))),
+    ...db.debts.flatMap((d) => d.payments.map((p) => ({ customer: d.customer, cust: d.cust, rep: d.rep, label: `Account balance ${d.id}`, href: p.batch ? `/payments/${p.batch}` : `/customers/${d.cust}`, loc: db.customers.find((c) => c.no === d.cust)?.route || "No location", p }))),
     ...db.customers.flatMap((c) => (c.creditLog ?? []).filter((e) => e.amount > 0 && e.method).map((e) => ({ customer: c.name, cust: c.no, rep: c.rep, label: "Credit", href: `/payments/${e.batch}`, loc: c.route || "No location", p: { date: e.date, time: e.time, amount: e.amount, method: e.method!, ref: e.ref ?? "" } }))),
   ].filter((x) => x.p.method !== "Customer credit").sort((a, b) => usToIso(a.p.date).localeCompare(usToIso(b.p.date)));
 }

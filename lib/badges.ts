@@ -1,5 +1,5 @@
 // Small counters shown next to menu entries (what is waiting for someone). Server only: reads the working copy.
-import { db, balance, orderBalance, billBalance } from "./wh-store";
+import { db, balance, orderBalance, billBalance, debtBalance } from "./wh-store";
 
 export type Badges = Record<string, number>;
 export function menuBadges(): Badges {
@@ -9,4 +9,4 @@ export function menuBadges(): Badges {
     "/payables": db.payables.filter((b) => billBalance(b) > 0).length,
   };
 }
-export const owed = () => Math.round(db.wrs.filter((w) => w.invoice).reduce((a, w) => a + Math.max(0, balance(w)), 0) * 100) / 100;
+export const owed = () => Math.round((db.wrs.filter((w) => w.invoice).reduce((a, w) => a + Math.max(0, balance(w)), 0) + db.debts.reduce((a, d) => a + Math.max(0, debtBalance(d)), 0)) * 100) / 100;

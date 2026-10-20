@@ -40,6 +40,7 @@ const TABLES: Table[] = [
   { name: "wh_oldinvoices", key: (o: { no: string }) => o.no, rows: () => db.oldInvoices, set: (r) => { db.oldInvoices = r; } },
   { name: "wh_payables", key: (b: { id: string }) => b.id, rows: () => db.payables, set: (r) => { db.payables = (r as { id: string }[]).sort((a, b) => b.id.localeCompare(a.id)) as never; } },
   { name: "wh_expenses", key: (e: { id: string }) => e.id, rows: () => db.expenses, set: (r) => { db.expenses = (r as { id: string }[]).sort((a, b) => b.id.localeCompare(a.id)) as never; } },
+  { name: "wh_debts", key: (d: { id: string }) => d.id, rows: () => db.debts, set: (r) => { db.debts = (r as { id: string }[]).sort((a, b) => b.id.localeCompare(a.id)) as never; } },
   { name: "wh_bookings", key: (b: { shipment: string }) => b.shipment, rows: () => db.bookings, set: (r) => { db.bookings = r; } },
 ];
 // Counters and the fee-name lists are two small rows of a "meta" table.

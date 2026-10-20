@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { WhLink } from "@/components/wh-link";
 import { notFound } from "next/navigation";
-import { db, balance, total, wrCode, money, r2, creditOf } from "@/lib/wh-store";
+import { db, balance, total, wrCode, money, r2, creditOf, debtBalance } from "@/lib/wh-store";
 import { PrintButton } from "@/components/print-button";
 
 const th = "px-2 py-1 font-semibold", td = "px-2 py-1";
@@ -9,13 +9,14 @@ const th = "px-2 py-1 font-semibold", td = "px-2 py-1";
 export default async function Page({ params }: { params: Promise<{ batch: string }> }) {
   const batch = decodeURIComponent((await params).batch);
   const allocs = db.wrs.flatMap((w) => w.payments.filter((p) => p.batch === batch).map((p) => ({ w, p })));
+  const dallocs = db.debts.flatMap((d) => d.payments.filter((p) => p.batch === batch).map((p) => ({ d, p })));
   const credits = db.customers.flatMap((c) => (c.creditLog ?? []).filter((e) => e.batch === batch).map((e) => ({ c, e })));
-  const first = allocs[0]?.p ?? credits[0]?.e;
+  const first = allocs[0]?.p ?? dallocs[0]?.p ?? credits[0]?.e;
   if (!first) notFound();
-  const c = allocs[0] ? db.customers.find((x) => x.no === allocs[0].w.cust) : credits[0].c;
-  const applied = r2(allocs.reduce((a, x) => a + x.p.amount, 0)), kept = r2(credits.reduce((a, x) => a + x.e.amount, 0));
-  const method = allocs[0]?.p.method ?? credits[0]?.e.method, ref = allocs[0]?.p.ref ?? credits[0]?.e.ref;
-  const stillOwed = c ? r2(db.wrs.filter((w) => w.cust === c.no && w.fees.length > 0).reduce((a, w) => a + Math.max(0, balance(w)), 0)) : 0;
+  const c = allocs[0] ? db.customers.find((x) => x.no === allocs[0].w.cust) : dallocs[0] ? db.customers.find((x) => x.no === dallocs[0].d.cust) : credits[0].c;
+  const applied = r2(allocs.reduce((a, x) => a + x.p.amount, 0) + dallocs.reduce((a, x) => a + x.p.amount, 0)), kept = r2(credits.reduce((a, x) => a + x.e.amount, 0));
+  const method = allocs[0]?.p.method ?? dallocs[0]?.p.method ?? credits[0]?.e.method, ref = allocs[0]?.p.ref ?? dallocs[0]?.p.ref ?? credits[0]?.e.ref;
+  const stillOwed = c ? r2(db.wrs.filter((w) => w.cust === c.no && w.fees.length > 0).reduce((a, w) => a + Math.max(0, balance(w)), 0) + db.debts.filter((d) => d.cust === c.no).reduce((a, d) => a + Math.max(0, debtBalance(d)), 0)) : 0;
   return (
     <main className="mx-auto max-w-2xl px-4 py-6 text-sm">
       <div className="flex items-start justify-between gap-4">
@@ -35,8 +36,14 @@ export default async function Page({ params }: { params: Promise<{ batch: string
           <tbody>{allocs.map(({ w, p }, i) => <tr key={i} className="border-b border-zinc-300"><td className={td}><WhLink path={`/warehouse/receipts/${w.id}`} className="text-brand underline print:no-underline">{wrCode(w)}</WhLink></td><td className={td}>{w.invoice ?? "–"}</td><td className={`${td} text-right`}>{money(total(w))}</td><td className={`${td} text-right`}>{money(p.amount)}</td><td className={`${td} text-right`}>{money(Math.max(0, balance(w)))}</td></tr>)}</tbody>
         </table>
       )}
+      {dallocs.length > 0 && (
+        <table className="mt-5 w-full text-left">
+          <thead className="border-b-2 border-black"><tr>{["Applied to", "Balance before", "Paid now", "Balance left"].map((h, i) => <th key={h} className={`${th} ${i > 0 ? "text-right" : ""}`}>{h}</th>)}</tr></thead>
+          <tbody>{dallocs.map(({ d, p }, i) => { const left = debtBalance(d); return <tr key={i} className="border-b border-zinc-300"><td className={td}>Account balance: {d.note}</td><td className={`${td} text-right`}>{money(r2(left + p.amount))}</td><td className={`${td} text-right`}>{money(p.amount)}</td><td className={`${td} text-right font-medium`}>{money(left)}</td></tr>; })}</tbody>
+        </table>
+      )}
       <dl className="ml-auto mt-4 grid max-w-xs grid-cols-[1fr_auto] gap-x-6 gap-y-1">
-        <dt>Applied to receipts</dt><dd className="text-right">{money(applied)}</dd>
+        <dt>Applied to what is owed</dt><dd className="text-right">{money(applied)}</dd>
         {kept > 0 && <><dt>Kept as customer credit</dt><dd className="text-right">{money(kept)}</dd></>}
         <dt className="border-t-2 border-black pt-1 font-bold">Total still owed</dt><dd className="border-t-2 border-black pt-1 text-right text-lg font-bold">{money(stillOwed)}</dd>
         {c && creditOf(c) > 0 && <><dt>Credit on file</dt><dd className="text-right">{money(creditOf(c))}</dd></>}

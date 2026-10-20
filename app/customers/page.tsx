@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { db, balance, money, r2, creditOf } from "@/lib/wh-store";
+import { db, balance, money, r2, creditOf, debtBalance } from "@/lib/wh-store";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -13,6 +13,7 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
   const needle = (q.q ?? "").trim().toLowerCase();
   const owed = new Map<number, number>();
   for (const w of db.wrs) if (w.invoice) owed.set(w.cust, r2((owed.get(w.cust) ?? 0) + Math.max(0, balance(w))));
+  for (const d of db.debts) owed.set(d.cust, r2((owed.get(d.cust) ?? 0) + Math.max(0, debtBalance(d))));
   const all = db.customers.filter((c) => (!needle || String(c.no) === needle || [c.name, c.phone, c.email, c.box ?? ""].some((v) => v.toLowerCase().includes(needle))) && (q.show !== "owing" || (owed.get(c.no) ?? 0) > 0));
   const pages = Math.max(1, Math.ceil(all.length / PER)), page = Math.min(pages, Math.max(1, Number(q.page) || 1));
   const rows = all.slice((page - 1) * PER, page * PER);
