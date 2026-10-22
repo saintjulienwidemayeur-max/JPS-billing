@@ -1,4 +1,4 @@
-export const VOLUMETRIC_DIVISOR = 139; // in³ per lb
+export const VOLUMETRIC_DIVISOR = 132; // in³ per lb
 export const RATE_PER_LB = 2.5;        // USD — move to a settings table when rates vary by route
 export const MIN_CHARGE = 5;
 

@@ -6,8 +6,8 @@ export { timeNow };
 import { COMPANY, HAITI, ORIGIN, DESTINATION, AIRLINE, COMPANY_EMAILS, BLOCKED_EMAILS } from "./company";
 
 export type Ship = "Air" | "Ocean";
-export type Item = { id: number; date: string; carrier: string; tracking: string; receiver: string; batch: string; customer?: string; piece?: number; ship?: Ship; shipped?: boolean; wr?: string; clientId?: string; prealert?: string };
-export type Piece = { no: number; type: string; l: number; w: number; h: number; lbs: number; contents?: string };
+export type Item = { id: number; date: string; carrier: string; tracking: string; receiver: string; batch: string; customer?: string; piece?: number; ship?: Ship; shipped?: boolean; wr?: string; clientId?: string; prealert?: string; by?: string };
+export type Piece = { no: number; type: string; l: number; w: number; h: number; lbs: number; contents?: string; by?: string; old?: boolean };
 export type Payment = { date: string; time?: string; amount: number; method: string; ref: string; batch?: string };
 // Money a customer paid beyond what they owed (positive) and credit used later (negative).
 export type CreditEntry = { date: string; time: string; amount: number; note: string; batch?: string; method?: string; ref?: string };
@@ -35,7 +35,7 @@ export type Notice = { date: string; time: string; channel: "Email" | "WhatsApp"
 export type WR = {
   id: string; date: string; customer: string; cust: number; email: string; route: string; rep: string; ship: Ship;
   comments: string; contents: string; declared: number; insurance: "Declined" | "Accepted";
-  fees: Fee[]; invoice?: string; invoiceDate?: string; invoiceSent?: string; invoiceMail?: { error?: string; tries: number; at?: string }; hereNotified?: boolean; ready?: boolean; rate?: number; dest?: string; estimate?: boolean; notices?: Notice[]; payments: Payment[]; pieces: Piece[];
+  fees: Fee[]; invoice?: string; invoiceDate?: string; invoiceSent?: string; invoiceMail?: { error?: string; tries: number; at?: string }; hereNotified?: boolean; ready?: boolean; rate?: number; dest?: string; by?: string; kind?: "Personal" | "Commercial"; shipperName?: string; shipperPhone?: string; receiverName?: string; receiverPhone?: string; estimate?: boolean; notices?: Notice[]; payments: Payment[]; pieces: Piece[];
 };
 // A purchase order: the customer pays JP's, and JP's buys the items and brings them to the Miami warehouse.
 export type OrderItem = { desc: string; qty: number; unit: number };
@@ -63,7 +63,7 @@ export type Prealert = {
   choice?: Ship; wait: boolean; signedBy: string; signedAt: string; notes: string; status: PrealertStatus; itemId?: number;
   siteId?: string; clientId?: string; // set when the customer announced it on the website
 };
-export type Load = { shipment: string; pallet: string; wr: string; no: number; date: string; here?: string };
+export type Load = { shipment: string; pallet: string; wr: string; no: number; date: string; here?: string; by?: string; hereBy?: string };
 export type Shipment = { name: string; ship: Ship; cargoId: string; date: string; shipped?: string };
 
 // Booking info of a shipment (the old "Shipment Booking Info" form). It feeds the Bill of Lading,
@@ -147,6 +147,9 @@ export const newCustomer = (name: string, init: Partial<Customer> = {}): Custome
   db.customers.push(c);
   return c;
 };
+// Who sends and who receives this receipt: what was typed on the receipt, else the customer (shipper) and the customer's consignee (receiver).
+export const shipperOf = (w: WR) => { const c = custOf(w); return { name: w.shipperName || w.customer, phone: w.shipperPhone || c?.phone || "" }; };
+export const receiverOf = (w: WR) => { const c = custOf(w); return { name: w.receiverName || c?.consignee || w.customer, phone: w.receiverPhone || c?.consigneePhone || c?.phone || "" }; };
 export const creditOf = (c: Customer | undefined) => r2((c?.creditLog ?? []).reduce((a, e) => a + e.amount, 0));
 export const custOf = (w: WR) => db.customers.find((c) => c.no === w.cust);
 export const repOf = (id: string) => db.reps.find((r) => r.id === id);
@@ -198,8 +201,12 @@ export const cargoOf = (name: string) => {
 };
 
 // ---------- Pieces ----------
-export const vol = (p: Piece) => r2((p.l * p.w * p.h) / 139);
-export const cuft = (p: Piece) => r2((p.l * p.w * p.h) / 1728);
+// Air: volume in lb = L x W x H / 132. Ocean: cubic feet = L x W x H / 1788. Pieces made before this change (`old`) keep 139 and 1728.
+export const AIR_DIVISOR = 132, CUFT_DIVISOR = 1788;
+export const vol = (p: Piece) => r2((p.l * p.w * p.h) / (p.old ? 139 : AIR_DIVISOR));
+export const cuft = (p: Piece) => r2((p.l * p.w * p.h) / (p.old ? 1728 : CUFT_DIVISOR));
+// Once, when the data is loaded: the pieces of invoiced receipts keep the old formulas, so an invoice never changes by itself.
+export function keepOldFormulas() { for (const w of db.wrs) if (w.invoice) for (const p of w.pieces) if (p.old === undefined) p.old = true; }
 export const chargeable = (p: Piece) => Math.max(p.lbs, vol(p));
 export const findPiece = (no: number) => {
   for (const w of db.wrs) { const p = w.pieces.find((x) => x.no === no); if (p) return { w, p }; }
