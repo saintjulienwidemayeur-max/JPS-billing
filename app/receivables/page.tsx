@@ -26,7 +26,10 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
   const aged = buckets.map(([label, lo, hi]) => [label, r2(owing.filter((w) => { const d = daysSince(w.date); return d >= lo && d <= hi; }).reduce((a, w) => a + balance(w), 0) + owingDebts.filter((x) => { const d = daysSince(x.date); return d >= lo && d <= hi; }).reduce((a, x) => a + debtBalance(x), 0))] as const);
   const owingOrders = db.orders.filter((o) => orderBalance(o) > 0);
   const outstanding = r2(owing.reduce((a, w) => a + balance(w), 0) + owingOrders.reduce((a, o) => a + orderBalance(o), 0) + owingDebts.reduce((a, d) => a + debtBalance(d), 0));
-  const debtors = [...new Map([...owing.map((w) => [w.cust, w.customer] as const), ...owingDebts.map((d) => [d.cust, d.customer] as const)]).entries()].map(([no, name]) => ({ no, name, owed: r2(owing.filter((w) => w.cust === no).reduce((a, w) => a + balance(w), 0) + owingDebts.filter((d) => d.cust === no).reduce((a, d) => a + debtBalance(d), 0)) })).sort((a, b) => b.owed - a.owed);
+  const owedBy = new Map<number, { name: string; owed: number }>(); // one pass: the receipts and balances of thousands of customers
+  for (const w of owing) { const e = owedBy.get(w.cust) ?? { name: w.customer, owed: 0 }; e.owed = r2(e.owed + balance(w)); owedBy.set(w.cust, e); }
+  for (const d of owingDebts) { const e = owedBy.get(d.cust) ?? { name: d.customer, owed: 0 }; e.owed = r2(e.owed + debtBalance(d)); owedBy.set(d.cust, e); }
+  const debtors = [...owedBy].map(([no, e]) => ({ no, name: e.name, owed: e.owed })).sort((a, b) => b.owed - a.owed);
   const credits = r2(db.customers.reduce((a, c) => a + Math.max(0, creditOf(c)), 0));
   return (
     <main className="mx-auto max-w-5xl px-4 py-6">
@@ -59,8 +62,9 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
       </div>
       {pays.length > 0 && (
         <table className="mt-4 w-full text-left text-sm"><thead><tr>{["Date", "Customer", "Receipt", "Method", "Reference", "Amount", ""].map((h, i) => <th key={i} className={th}>{h}</th>)}</tr></thead>
-          <tbody>{[...pays].reverse().map((x, k) => <tr key={k} className="border-b border-zinc-100"><td className={td}>{x.p.date}{x.p.time && ` ${x.p.time}`}</td><td className={td}>{x.customer}</td><td className={td}>{x.label}</td><td className={td}>{x.p.method}</td><td className={td}>{x.p.ref || "–"}</td><td className={td}>{money(x.p.amount)}</td><td className={td}><Link href={x.href} className="text-brand underline">Receipt</Link></td></tr>)}</tbody></table>
+          <tbody>{[...pays].reverse().slice(0, 300).map((x, k) => <tr key={k} className="border-b border-zinc-100"><td className={td}>{x.p.date}{x.p.time && ` ${x.p.time}`}</td><td className={td}>{x.customer}</td><td className={td}>{x.label}</td><td className={td}>{x.p.method}</td><td className={td}>{x.p.ref || "–"}</td><td className={td}>{money(x.p.amount)}</td><td className={td}><Link href={x.href} className="text-brand underline">Receipt</Link></td></tr>)}</tbody></table>
       )}
+      {pays.length > 300 && <p className="mt-1 text-xs text-zinc-600">The latest 300 of {pays.length} payments are listed. The totals above cover all of them; the Payment log report lists every payment.</p>}
     </main>
   );
 }
