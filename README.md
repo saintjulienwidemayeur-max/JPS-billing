@@ -26,3 +26,6 @@ With no `DATABASE_URL` everything lives in memory and resets when the server res
 
 ## PWA
 The app installs like an app (Chrome/Edge: "Install the app" in the menu; phone: Add to Home Screen): `app/manifest.ts`, `public/sw.js` (keeps only static files, never pages or data), `public/offline.html`, icons in `public/icons/`.
+
+## Checks
+`npm run check` (type check; also runs on every pull request). `BASE=... node docs/smoke.mjs` opens every page of the menu on a running app and fails on a blank, error or empty page. Receipt and invoice lines come from ONE function, `docLines(w)` in `lib/wh-store.ts`.
