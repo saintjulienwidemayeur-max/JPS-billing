@@ -7,7 +7,7 @@ import { COMPANY, HAITI, ORIGIN, DESTINATION, AIRLINE, COMPANY_EMAILS, BLOCKED_E
 
 export type Ship = "Air" | "Ocean";
 export type Item = { id: number; date: string; carrier: string; tracking: string; receiver: string; batch: string; customer?: string; piece?: number; ship?: Ship; shipped?: boolean; wr?: string; clientId?: string; prealert?: string; by?: string; office?: "Haiti" };
-export type Piece = { no: number; type: string; l: number; w: number; h: number; lbs: number; contents?: string; by?: string; old?: boolean };
+export type Piece = { no: number; type: string; l: number; w: number; h: number; lbs: number; contents?: string; by?: string; old?: boolean; rd?: number };
 export type Payment = { date: string; time?: string; amount: number; method: string; ref: string; batch?: string };
 // Money a customer paid beyond what they owed (positive) and credit used later (negative).
 export type CreditEntry = { date: string; time: string; amount: number; note: string; batch?: string; method?: string; ref?: string };
@@ -127,7 +127,11 @@ export const db: WhDb = (g.__wh13 ??= {
   n: { wr: 11018, piece: 20032, item: 3, cargo: 611, inv: 5001, batch: 1, cust: 1001, rep: 1, fee: 1, pay: 1001, pickup: 1, prealert: 1, mail: 1, user: 1, audit: 1, bill: 1 },
 });
 export const nowStr = today;
-export const r2 = (n: number) => Math.round(n * 100) / 100;
+// Cents: half a cent rounds UP (1.13 lb x $4.50 = 5.085 -> 5.09). The tiny extra only cancels binary floating-point error (5.085 is stored as 5.08499999...).
+export const r2 = (n: number) => Math.sign(n) * Math.round(Math.abs(n) * 100 + 1e-7) / 100;
+// The old rounding (5.085 -> 5.08), kept for what was invoiced before the change (pieces flagged `rd: 1` or `old`) and for purchase orders, so nothing already billed moves by a cent.
+export const r2o = (n: number) => Math.round(n * 100) / 100;
+export const legacyRound = (p: { old?: boolean; rd?: number }) => p.old === true || p.rd === 1;
 
 // ---------- Receipt numbers ----------
 // JPF = shipped by air, JPL = shipped by boat. The label code is  customer number | receipt | piece.
@@ -207,10 +211,10 @@ export const cargoOf = (name: string) => {
 // ---------- Pieces ----------
 // Air: volume in lb = L x W x H / 132. Ocean: cubic feet = L x W x H / 1788. Pieces made before this change (`old`) keep 139 and 1728.
 export const AIR_DIVISOR = 132, CUFT_DIVISOR = 1788;
-export const vol = (p: Piece) => r2((p.l * p.w * p.h) / (p.old ? 139 : AIR_DIVISOR));
-export const cuft = (p: Piece) => r2((p.l * p.w * p.h) / (p.old ? 1728 : CUFT_DIVISOR));
+export const vol = (p: Piece) => (legacyRound(p) ? r2o : r2)((p.l * p.w * p.h) / (p.old ? 139 : AIR_DIVISOR));
+export const cuft = (p: Piece) => (legacyRound(p) ? r2o : r2)((p.l * p.w * p.h) / (p.old ? 1728 : CUFT_DIVISOR));
 // Once, when the data is loaded: the pieces of invoiced receipts keep the old formulas, so an invoice never changes by itself.
-export function keepOldFormulas() { for (const w of db.wrs) if (w.invoice) for (const p of w.pieces) if (p.old === undefined) p.old = true; }
+export function keepOldFormulas() { for (const w of db.wrs) if (w.invoice) for (const p of w.pieces) { if (p.old === undefined) p.old = true; if (p.rd === undefined) p.rd = 1; } }
 export const chargeable = (p: Piece) => Math.max(p.lbs, vol(p));
 // Looked up by number all the time (a shipment lists thousands of pieces): an index of the receipts, rebuilt when the list changes.
 // A hit is checked before it is trusted (the piece may have been deleted or moved), else the receipts are searched.
@@ -231,7 +235,7 @@ export const findPiece = (no: number) => {
 // Insurance is automatic: only when the customer accepted it and a declared value is set.
 // Freight is automatic: Air = chargeable lb (larger of gross and volumetric weight) x rate, Ocean = cubic feet x rate.
 export const freightQty = (w: WR) => r2(w.pieces.reduce((a, p) => a + (w.ship === "Ocean" ? cuft(p) : chargeable(p)), 0));
-export const freightFee = (w: WR) => ((w.rate ?? 0) > 0 ? r2(freightQty(w) * (w.rate ?? 0)) : 0);
+export const freightFee = (w: WR) => ((w.rate ?? 0) > 0 ? (w.pieces.some(legacyRound) ? r2o : r2)(freightQty(w) * (w.rate ?? 0)) : 0);
 export const freightDesc = (w: WR) => `Freight Charges - Ref. WR: ${w.id} - (${freightQty(w)} ${w.ship === "Ocean" ? "cuf" : "lbs"}) - Number Of Pieces: ${w.pieces.length}`;
 export const charges = (w: WR) => r2(freightFee(w) + w.fees.filter((f) => f.kind === "charge").reduce((a, f) => a + f.amount, 0));
 export const credits = (w: WR) => r2(w.fees.filter((f) => f.kind === "credit").reduce((a, f) => a + f.amount, 0));
@@ -318,9 +322,9 @@ export const debtPaid = (d: Debt) => r2(d.payments.reduce((a, p) => a + p.amount
 export const debtBalance = (d: Debt) => r2(d.amount - debtPaid(d));
 export const debtsOwed = (cust: number) => r2(db.debts.filter((d) => d.cust === cust).reduce((a, d) => a + Math.max(0, debtBalance(d)), 0));
 export const ORDER_FEE_PCT = 15;
-export const orderLine = (i: OrderItem) => r2(i.qty * i.unit);
+export const orderLine = (i: OrderItem) => r2o(i.qty * i.unit);
 export const orderSubtotal = (o: Order) => r2(o.items.reduce((a, i) => a + orderLine(i), 0));
-export const orderFee = (o: Order) => r2((orderSubtotal(o) * o.feePct) / 100);
+export const orderFee = (o: Order) => r2o((orderSubtotal(o) * o.feePct) / 100);
 export const orderTotal = (o: Order) => r2(orderSubtotal(o) + orderFee(o));
 export const orderPaid = (o: Order) => r2(o.payments.reduce((a, p) => a + p.amount, 0));
 export const orderBalance = (o: Order) => r2(orderTotal(o) - orderPaid(o));

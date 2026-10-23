@@ -31,7 +31,7 @@ export const createInvoice = act("createInvoice", async (f: F) => {
   if (!w) return;
   if (w.estimate) back("/invoices/new", { err: `${wrCode(w)} is marked as an estimate. Untick "estimate" on the receipt (warehouse app) when the real weights are in, then invoice it.` });
   if (!w.pieces.length && charges(w) <= 0) back("/invoices/new", { err: "Add at least one piece or one fee to the receipt (in the warehouse app) before invoicing." });
-  if (!w.invoice) { for (const p of w.pieces) p.old ??= false; /* this invoice is made with today's formulas: never switch it to the old ones */ w.invoice = `INV-${db.n.inv++}`; w.invoiceDate = nowStr(); queueMail(() => emailInvoice(w)); } // the invoice (PDF) is e-mailed by itself
+  if (!w.invoice) { for (const p of w.pieces) { p.old ??= false; p.rd ??= 0; } /* this invoice is made with today's formulas: never switch it to the old ones */ w.invoice = `INV-${db.n.inv++}`; w.invoiceDate = nowStr(); queueMail(() => emailInvoice(w)); } // the invoice (PDF) is e-mailed by itself
   back(`/invoices/${w.invoice}`, { ok: `Invoice ${w.invoice} created.` });
 });
 // Bulk invoicing: every receipt of the list the clerk is looking at (ids from the page), each checked again here. Each invoice is e-mailed by itself, as one by one.
@@ -41,7 +41,7 @@ export const createInvoices = act("createInvoices", async (f: F) => {
   for (const id of ids) {
     const w = db.wrs.find((x) => x.id === id);
     if (!w || w.invoice || w.estimate || !priced(w) || (!w.pieces.length && charges(w) <= 0)) { skipped++; continue; }
-    for (const p of w.pieces) p.old ??= false;
+    for (const p of w.pieces) { p.old ??= false; p.rd ??= 0; }
     w.invoice = `INV-${db.n.inv++}`; w.invoiceDate = nowStr(); made++;
     queueMail(() => emailInvoice(w));
   }
