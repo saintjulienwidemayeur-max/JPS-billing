@@ -17,6 +17,15 @@ const back = (path: string, q: Record<string, string> = {}): never => {
 // After a payment or an invoice change: the invoice if there is one, else the customer's payment page.
 const wrPath = (id: string) => { const w = db.wrs.find((x) => x.id === id); return w?.invoice ? `/payments?inv=${w.invoice}` : `/payments?c=${w?.cust ?? ""}`; };
 
+// A double click on "Enter payment" sends the form twice: the same amount, method and reference for the same target within a few seconds is refused once.
+const recent = ((globalThis as unknown as { __payDup?: Map<string, number> }).__payDup ??= new Map<string, number>());
+const twice = (target: string, amount: number, method: string, ref: string) => {
+  const key = `${target}|${amount}|${method.toLowerCase()}|${ref}`, now = Date.now();
+  for (const [k, t] of recent) if (now - t > 10_000) recent.delete(k);
+  if (recent.has(key)) return true;
+  recent.set(key, now); return false;
+};
+const DUP = "This exact payment was just entered: check the list before entering it again.";
 export const createInvoice = act("createInvoice", async (f: F) => {
   const w = db.wrs.find((x) => x.id === s(f, "wr"));
   if (!w) return;
@@ -47,6 +56,7 @@ export const addPayment = act("addPayment", async (f: F) => {
   const method = s(f, "method");
   if (!method || method.length > 30) back(wrPath(w.id), { err: "Choose how the customer paid (or type a new payment method)." });
   const paid = r2(amount);
+  if (twice(`wr${w.id}`, paid, method, s(f, "ref"))) back(wrPath(w.id), { err: DUP });
   w.payments.push({ date: nowStr(), time: timeNow(), amount: paid, method, ref: s(f, "ref") });
   rememberName(db.payMethods, method);
   back(wrPath(w.id), { ok: `Payment of ${money(paid)} by ${method} added. ${balance(w) > 0 ? `Balance left: ${money(balance(w))}.` : "Paid in full."}` });
@@ -58,7 +68,7 @@ export const voidPayment = act("voidPayment", async (wr: string, i: number) => {
   const [p] = w.payments.splice(i, 1);
   const c = custOf(w);
   if (p.method === "Customer credit" && c) (c.creditLog ??= []).push({ date: nowStr(), time: timeNow(), amount: p.amount, note: `Returned: payment on ${wrCode(w)} voided` });
-  back(wrPath(w.id), { ok: `Payment of ${money(p.amount)} (${p.method}) voided.` });
+  back(w.invoice ? `/invoices/${encodeURIComponent(w.invoice)}` : wrPath(w.id), { ok: `Payment of ${money(p.amount)} (${p.method}) voided.` });
 });
 
 // ---------- Billing: customer payments, credit, invoice follow-up ----------
@@ -71,6 +81,7 @@ export const receivePayment = act("receivePayment", async (f: F) => {
   if (!Number.isFinite(amount) || amount <= 0) back(here, { err: "Enter the amount received (more than 0)." });
   if (amount > 1_000_000) back(here, { err: "That amount is more than $1,000,000: check it, or enter it in several payments." });
   if (!method || method.length > 30) back(here, { err: "Choose how the customer paid (or type a new payment method)." });
+  if (twice(`c${c!.no}`, r2(amount), method, ref)) back(here, { err: DUP });
   const batch = `PAY-${db.n.pay++}`, date = nowStr(), time = timeNow();
   let left = r2(amount);
   // Receipts with a balance and the balances that are on no invoice (account balances): all paid oldest first.
@@ -121,7 +132,7 @@ export const cancelInvoice = act("cancelInvoice", async (wr: string) => {
   if (w.payments.length) back(`/invoices/${w.invoice}`, { err: "This invoice has payments. Void them first." });
   const no = w.invoice;
   w.invoice = undefined; w.invoiceDate = undefined; w.invoiceSent = undefined;
-  back(wrPath(w.id), { ok: `Invoice ${no} cancelled.` });
+  back(`/invoices/new`, { q: String(w.id), ok: `Invoice ${no} cancelled: ${wrCode(w)} is waiting for an invoice again.` });
 });
 
 // ---------- Purchase orders ----------
@@ -191,6 +202,7 @@ export const addOrderPayment = act("addOrderPayment", async (f: F) => {
   if (!Number.isFinite(amount) || amount <= 0) back(orderPath(o.id), { err: "Enter a payment amount more than 0." });
   if (amount > orderBalance(o) + 0.001) back(orderPath(o.id), { err: `That's more than the balance of ${money(orderBalance(o))}.` });
   if (!method || method.length > 30) back(orderPath(o.id), { err: "Choose how the customer paid (or type a new payment method)." });
+  if (twice(`o${o.id}`, r2(amount), method, s(f, "ref"))) back(orderPath(o.id), { err: DUP });
   o.payments.push({ date: nowStr(), time: timeNow(), amount: r2(amount), method, ref: s(f, "ref") });
   rememberName(db.payMethods, method);
   if (orderBalance(o) <= 0 && o.status === "Invoiced") o.status = "Paid";
@@ -223,6 +235,7 @@ export const payBill = act("payBill", async (f: F) => {
   if (!Number.isFinite(amount) || amount <= 0) back(PB, { err: "Enter the amount paid (more than 0)." });
   if (amount > billBalance(b) + 0.001) back(PB, { err: `That's more than the balance of ${money(billBalance(b))}.` });
   if (!method || method.length > 30) back(PB, { err: "Enter how it was paid." });
+  if (twice(`b${b.id}`, r2(amount), method, s(f, "ref"))) back(PB, { err: DUP });
   b.payments.push({ date: nowStr(), time: timeNow(), amount: r2(amount), method, ref: s(f, "ref") });
   rememberName(db.payMethods, method);
   back(PB, { ok: `Paid ${money(r2(amount))} to ${b.vendor}.` });
@@ -282,6 +295,7 @@ export const payDebt = act("payDebt", async (f: F) => {
   if (!Number.isFinite(amount) || amount <= 0) back(here, { err: "Enter the amount paid (more than 0)." });
   if (amount > debtBalance(d) + 0.001) back(here, { err: `That is more than the balance of ${money(debtBalance(d))}.` });
   if (!method || method.length > 30) back(here, { err: "Choose how the customer paid (or type a new payment method)." });
+  if (twice(`d${d.id}`, r2(amount), method, s(f, "ref"))) back(here, { err: DUP });
   const batch = `PAY-${db.n.pay++}`;
   d.payments.push({ date: nowStr(), time: timeNow(), amount: r2(amount), method, ref: s(f, "ref"), batch });
   rememberName(db.payMethods, method);
