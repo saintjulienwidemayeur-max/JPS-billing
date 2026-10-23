@@ -24,7 +24,7 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
       <p className="text-sm text-zinc-600">Find a customer to see what they owe, their invoices and payments, and to print their statement. Customers are added and edited in the warehouse app.</p>
       <form className="mt-4 flex flex-wrap items-center gap-2">
         <Input name="q" defaultValue={q.q} placeholder="Number, name, phone, e-mail or box" className="max-w-80" autoFocus />
-        <select name="show" defaultValue={q.show ?? ""} className="h-9 rounded-md border bg-white px-2 text-sm"><option value="">All customers</option><option value="owing">Only who owes</option></select>
+        <select name="show" aria-label="Show" defaultValue={q.show ?? ""} className="h-9 rounded-md border bg-white px-2 text-sm"><option value="">All customers</option><option value="owing">Only who owes</option></select>
         <Button type="submit" variant="outline">Search</Button>
         <span className="text-sm text-zinc-600">{all.length.toLocaleString("en-US")} customers</span>
       </form>
