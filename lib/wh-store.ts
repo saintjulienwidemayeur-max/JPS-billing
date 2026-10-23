@@ -212,8 +212,18 @@ export const cuft = (p: Piece) => r2((p.l * p.w * p.h) / (p.old ? 1728 : CUFT_DI
 // Once, when the data is loaded: the pieces of invoiced receipts keep the old formulas, so an invoice never changes by itself.
 export function keepOldFormulas() { for (const w of db.wrs) if (w.invoice) for (const p of w.pieces) if (p.old === undefined) p.old = true; }
 export const chargeable = (p: Piece) => Math.max(p.lbs, vol(p));
+// Looked up by number all the time (a shipment lists thousands of pieces): an index of the receipts, rebuilt when the list changes.
+// A hit is checked before it is trusted (the piece may have been deleted or moved), else the receipts are searched.
+let pieceIndex: { wrs: WR[]; len: number; map: Map<number, { w: WR; p: Piece }> } | null = null;
 export const findPiece = (no: number) => {
-  for (const w of db.wrs) { const p = w.pieces.find((x) => x.no === no); if (p) return { w, p }; }
+  if (!pieceIndex || pieceIndex.wrs !== db.wrs || pieceIndex.len !== db.wrs.length) {
+    const map = new Map<number, { w: WR; p: Piece }>();
+    for (const w of db.wrs) for (const p of w.pieces) map.set(p.no, { w, p });
+    pieceIndex = { wrs: db.wrs, len: db.wrs.length, map };
+  }
+  const hit = pieceIndex.map.get(no);
+  if (hit && hit.w.pieces.includes(hit.p)) return hit;
+  for (const w of db.wrs) { const p = w.pieces.find((x) => x.no === no); if (p) { pieceIndex.map.set(no, { w, p }); return { w, p }; } }
 };
 
 // ---------- Money ----------
@@ -233,6 +243,8 @@ export const total = (w: WR) => Math.max(0, r2(charges(w) + insuranceFee(w) - cr
 export const paidAmt = (w: WR) => r2(w.payments.reduce((a, p) => a + p.amount, 0));
 export const balance = (w: WR) => r2(total(w) - paidAmt(w));
 export const payStatus = (w: WR) => (paidAmt(w) <= 0 ? (total(w) <= 0 && priced(w) ? "No charge" : "Unpaid") : balance(w) <= 0 ? "Paid in full" : "Partially paid");
+// Same helper as `priced` (a receipt that has something to pay, also when it only has the automatic freight line).
+export const hasCharges = priced;
 export const money = (n: number) => `${n < 0 ? "-" : ""}$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 // What the same goods would cost shipped the other way (same pieces, standard rate of that method, its automatic handling fee).

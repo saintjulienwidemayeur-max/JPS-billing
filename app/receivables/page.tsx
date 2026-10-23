@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { db, balance, wrCode, money, r2, repLabel, creditOf, orderBalance, debtBalance, priced, owesOf } from "@/lib/wh-store";
+import { db, balance, wrCode, money, r2, repLabel, creditOf, orderBalance, debtBalance, priced } from "@/lib/wh-store";
 import { isoToday, usToIso, daysSince } from "@/lib/clock";
 import { allPayments, type Pay } from "@/lib/paylist";
 import { Input } from "@/components/ui/input";
@@ -23,7 +23,12 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
   const open: { date: string; owed: number }[] = [...owing.map((w) => ({ date: w.date, owed: balance(w) })), ...owingDebts.map((d) => ({ date: d.date, owed: debtBalance(d) })), ...owingOrders.map((o) => ({ date: o.date, owed: orderBalance(o) }))];
   const aged = buckets.map(([label, lo, hi]) => [label, r2(open.filter((x) => { const d = daysSince(x.date); return d >= lo && d <= hi; }).reduce((a, x) => a + x.owed, 0))] as const);
   const outstanding = r2(owing.reduce((a, w) => a + balance(w), 0) + owingOrders.reduce((a, o) => a + orderBalance(o), 0) + owingDebts.reduce((a, d) => a + debtBalance(d), 0));
-  const debtors = [...new Map([...owing.map((w) => [w.cust, w.customer] as const), ...owingDebts.map((d) => [d.cust, d.customer] as const), ...owingOrders.map((o) => [o.cust, o.customer] as const)]).entries()].map(([no, name]) => ({ no, name, owed: owesOf(no).total })).sort((a, b) => b.owed - a.owed);
+  const owedBy = new Map<number, { name: string; owed: number }>(); // one pass (owesOf per customer would search everything again for each of thousands of customers); same sum as owesOf
+  const add = (no: number, name: string, n: number) => { const e = owedBy.get(no) ?? { name, owed: 0 }; e.owed = r2(e.owed + n); owedBy.set(no, e); };
+  for (const w of owing) add(w.cust, w.customer, balance(w));
+  for (const o of owingOrders) add(o.cust, o.customer, orderBalance(o));
+  for (const d of owingDebts) add(d.cust, d.customer, debtBalance(d));
+  const debtors = [...owedBy].map(([no, e]) => ({ no, name: e.name, owed: e.owed })).sort((a, b) => b.owed - a.owed);
   const credits = r2(db.customers.reduce((a, c) => a + Math.max(0, creditOf(c)), 0));
   return (
     <main className="mx-auto max-w-5xl px-4 py-6">
@@ -56,8 +61,9 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
       </div>
       {pays.length > 0 && (
         <table className="mt-4 w-full text-left text-sm"><thead><tr>{["Date", "Customer", "Receipt", "Method", "Reference", "Amount", ""].map((h, i) => <th key={i} className={th}>{h}</th>)}</tr></thead>
-          <tbody>{[...pays].reverse().map((x, k) => <tr key={k} className="border-b border-zinc-100"><td className={td}>{x.p.date}{x.p.time && ` ${x.p.time}`}</td><td className={td}>{x.customer}</td><td className={td}>{x.label}</td><td className={td}>{x.p.method}</td><td className={td}>{x.p.ref || "–"}</td><td className={td}>{money(x.p.amount)}</td><td className={td}><Link href={x.href} className="text-brand underline">Receipt</Link></td></tr>)}</tbody></table>
+          <tbody>{[...pays].reverse().slice(0, 300).map((x, k) => <tr key={k} className="border-b border-zinc-100"><td className={td}>{x.p.date}{x.p.time && ` ${x.p.time}`}</td><td className={td}>{x.customer}</td><td className={td}>{x.label}</td><td className={td}>{x.p.method}</td><td className={td}>{x.p.ref || "–"}</td><td className={td}>{money(x.p.amount)}</td><td className={td}><Link href={x.href} className="text-brand underline">Receipt</Link></td></tr>)}</tbody></table>
       )}
+      {pays.length > 300 && <p className="mt-1 text-xs text-zinc-600">The latest 300 of {pays.length} payments are listed. The totals above cover all of them; the Payment log report lists every payment.</p>}
     </main>
   );
 }
