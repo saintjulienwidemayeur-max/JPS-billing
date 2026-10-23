@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { db, expenseOf, total, paidAmt, balance, money, r2, chargeable } from "@/lib/wh-store";
+import { db, expenseOf, total, paidAmt, balance, money, r2, chargeable, shToUSA } from "@/lib/wh-store";
 import { PrintButton } from "@/components/print-button";
 
 export const metadata = { title: "Shipments report · JP's Billing" };
@@ -21,7 +21,7 @@ export default async function Page() {
         <table className="mt-4 w-full text-left">
           <thead className="border-b-2 border-black"><tr>{["Shipment", "Date", "Receipts", "Pieces", "Billed lb", "Billed", "Paid", "Owed", "Cost", "Not invoiced"].map((h, i) => <th key={i} className={`${th} ${i >= 3 && i <= 8 ? "text-right" : ""}`}>{h}</th>)}</tr></thead>
           <tbody>{rows.map((r) => (
-            <tr key={r.sh.name} className="border-b border-zinc-200"><td className={`${td} whitespace-nowrap font-medium`}>{r.sh.name} <span className="text-xs text-zinc-500">{r.sh.ship}{r.sh.shipped ? "" : " · open"}</span></td><td className={td}>{r.sh.shipped ?? r.sh.date}</td><td className={td}>{r.wrs.length}</td><td className={`${td} text-right`}>{r.pieces}</td><td className={`${td} text-right`}>{r.lbs}</td><td className={`${td} text-right`}>{money(r.billed)}</td><td className={`${td} text-right`}>{money(r.paid)}</td><td className={`${td} text-right font-medium ${r.owed > 0 ? "text-red-700" : ""}`}>{money(r.owed)}</td><td className={`${td} text-right`}>{r.cost ? money(r.cost) : "–"}</td><td className={td}>{r.noInvoice > 0 ? <Link href="/invoices/new" className="text-brand underline">{r.noInvoice}</Link> : "–"}</td></tr>))}
+            <tr key={r.sh.name} className="border-b border-zinc-200"><td className={`${td} whitespace-nowrap font-medium`}>{r.sh.name} <span className="text-xs text-zinc-500">{r.sh.ship}{shToUSA(r.sh) ? " · Haiti → Miami" : ""}{r.sh.shipped ? "" : " · open"}</span></td><td className={td}>{r.sh.shipped ?? r.sh.date}</td><td className={td}>{r.wrs.length}</td><td className={`${td} text-right`}>{r.pieces}</td><td className={`${td} text-right`}>{r.lbs}</td><td className={`${td} text-right`}>{money(r.billed)}</td><td className={`${td} text-right`}>{money(r.paid)}</td><td className={`${td} text-right font-medium ${r.owed > 0 ? "text-red-700" : ""}`}>{money(r.owed)}</td><td className={`${td} text-right`}>{r.cost ? money(r.cost) : "–"}</td><td className={td}>{r.noInvoice > 0 ? <Link href="/invoices/new" className="text-brand underline">{r.noInvoice}</Link> : "–"}</td></tr>))}
             <tr className="font-bold"><td className={td} colSpan={5}>Total</td><td className={`${td} text-right`}>{money(sum("billed"))}</td><td className={`${td} text-right`}>{money(sum("paid"))}</td><td className={`${td} text-right`}>{money(sum("owed"))}</td><td className={`${td} text-right`}>{money(r2(rows.reduce((a, r) => a + r.cost, 0)))}</td><td /></tr></tbody>
         </table>
       )}
