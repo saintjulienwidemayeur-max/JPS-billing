@@ -6,7 +6,7 @@ export { timeNow };
 import { COMPANY, HAITI, ORIGIN, DESTINATION, AIRLINE, COMPANY_EMAILS, BLOCKED_EMAILS } from "./company";
 
 export type Ship = "Air" | "Ocean";
-export type Item = { id: number; date: string; carrier: string; tracking: string; receiver: string; batch: string; customer?: string; piece?: number; ship?: Ship; shipped?: boolean; wr?: string; clientId?: string; prealert?: string; by?: string };
+export type Item = { id: number; date: string; carrier: string; tracking: string; receiver: string; batch: string; customer?: string; piece?: number; ship?: Ship; shipped?: boolean; wr?: string; clientId?: string; prealert?: string; by?: string; office?: "Haiti" };
 export type Piece = { no: number; type: string; l: number; w: number; h: number; lbs: number; contents?: string; by?: string; old?: boolean };
 export type Payment = { date: string; time?: string; amount: number; method: string; ref: string; batch?: string };
 // Money a customer paid beyond what they owed (positive) and credit used later (negative).
@@ -35,7 +35,7 @@ export type Notice = { date: string; time: string; channel: "Email" | "WhatsApp"
 export type WR = {
   id: string; date: string; customer: string; cust: number; email: string; route: string; rep: string; ship: Ship;
   comments: string; contents: string; declared: number; insurance: "Declined" | "Accepted";
-  fees: Fee[]; invoice?: string; invoiceDate?: string; invoiceSent?: string; invoiceMail?: { error?: string; tries: number; at?: string }; hereNotified?: boolean; ready?: boolean; rate?: number; dest?: string; by?: string; kind?: "Personal" | "Commercial"; shipperName?: string; shipperPhone?: string; receiverName?: string; receiverPhone?: string; estimate?: boolean; notices?: Notice[]; payments: Payment[]; pieces: Piece[];
+  fees: Fee[]; invoice?: string; invoiceDate?: string; invoiceSent?: string; invoiceMail?: { error?: string; tries: number; at?: string }; hereNotified?: boolean; ready?: boolean; rate?: number; dest?: string; by?: string; kind?: "Personal" | "Commercial"; shipperName?: string; shipperPhone?: string; receiverName?: string; receiverPhone?: string; estimate?: boolean; receiverAddress?: string; notices?: Notice[]; payments: Payment[]; pieces: Piece[];
 };
 // A purchase order: the customer pays JP's, and JP's buys the items and brings them to the Miami warehouse.
 export type OrderItem = { desc: string; qty: number; unit: number };
@@ -64,7 +64,11 @@ export type Prealert = {
   siteId?: string; clientId?: string; // set when the customer announced it on the website
 };
 export type Load = { shipment: string; pallet: string; wr: string; no: number; date: string; here?: string; by?: string; hereBy?: string };
-export type Shipment = { name: string; ship: Ship; cargoId: string; date: string; shipped?: string };
+// `dir`: "USA" = goes from Haiti to Miami (absent = Miami to Haiti, as before). Same fields as the warehouse app.
+export type Shipment = { name: string; ship: Ship; cargoId: string; date: string; shipped?: string; shippedBy?: string; dir?: "USA" };
+export const US_DEST = "Miami";
+export const toUSA = (w: { dest?: string }) => w.dest === US_DEST;
+export const shToUSA = (sh: { dir?: string } | undefined) => sh?.dir === "USA";
 
 // Booking info of a shipment (the old "Shipment Booking Info" form). It feeds the Bill of Lading,
 // the Shipper's Letter of Instruction and the cargo list.
@@ -149,7 +153,7 @@ export const newCustomer = (name: string, init: Partial<Customer> = {}): Custome
 };
 // Who sends and who receives this receipt: what was typed on the receipt, else the customer (shipper) and the customer's consignee (receiver).
 export const shipperOf = (w: WR) => { const c = custOf(w); return { name: w.shipperName || w.customer, phone: w.shipperPhone || c?.phone || "" }; };
-export const receiverOf = (w: WR) => { const c = custOf(w); return { name: w.receiverName || c?.consignee || w.customer, phone: w.receiverPhone || c?.consigneePhone || c?.phone || "" }; };
+export const receiverOf = (w: WR) => { const c = custOf(w); return { name: w.receiverName || c?.consignee || w.customer, phone: w.receiverPhone || c?.consigneePhone || c?.phone || "", address: w.receiverAddress || c?.consigneeAddress || "" }; };
 export const creditOf = (c: Customer | undefined) => r2((c?.creditLog ?? []).reduce((a, e) => a + e.amount, 0));
 export const custOf = (w: WR) => db.customers.find((c) => c.no === w.cust);
 export const repOf = (id: string) => db.reps.find((r) => r.id === id);

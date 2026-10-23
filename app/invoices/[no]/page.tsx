@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { cancelInvoice, voidPayment, notifyInvoiceEmail } from "@/lib/billing-actions";
 import { listDocs } from "@/lib/persist";
 import { ConfirmSubmit } from "@/components/confirm-submit";
-import { db, custOf, repOf, wrCode, total, paidAmt, balance, payStatus, money, insuranceFee, quote, r2, freightFee, freightQty, freightDesc } from "@/lib/wh-store";
+import { db, custOf, repOf, wrCode, total, paidAmt, balance, payStatus, money, insuranceFee, quote, r2, freightFee, freightQty, freightDesc, receiverOf, toUSA } from "@/lib/wh-store";
 import { cardFees } from "@/lib/pricing";
 import { shortDate } from "@/lib/fmt";
 import { PrintButton } from "@/components/print-button";
@@ -50,13 +50,13 @@ export default async function Page({ params, searchParams }: { params: Promise<{
         <div><dt className="text-xs text-zinc-500">Invoice date</dt><dd className="font-medium">{shortDate(w.invoiceDate ?? w.date)}</dd></div>
         <div><dt className="text-xs text-zinc-500">Shipment ID</dt><dd className="font-medium">{shipment || "–"}</dd></div>
         <div><dt className="text-xs text-zinc-500">Receipt</dt><dd className="font-medium">{wrCode(w)}</dd></div>
-        <div><dt className="text-xs text-zinc-500">Type</dt><dd>{w.ship}</dd></div>
+        <div><dt className="text-xs text-zinc-500">Type</dt><dd>{w.ship}{toUSA(w) && " · Haiti → Miami"}</dd></div>
         <div><dt className="text-xs text-zinc-500">Status</dt><dd>{payStatus(w)}</dd></div>
         <div><dt className="text-xs text-zinc-500">Representative</dt><dd>{repOf(w.rep)?.initials ?? "–"}</dd></div>
       </dl>
       <div className="mt-3 grid grid-cols-2 gap-6">
         <div><div className="text-xs text-zinc-500">Bill To</div><b>{w.customer}</b><div>{c?.billing}</div>{w.email && <div>{w.email}</div>}</div>
-        <div><div className="text-xs text-zinc-500">Consignee</div><b>{c?.consignee || w.customer}</b><div>{[c?.consigneeCity, c?.consigneeCountry].filter(Boolean).join(", ")}</div></div>
+        <div><div className="text-xs text-zinc-500">Consignee</div><b>{receiverOf(w).name}</b><div>{toUSA(w) ? [receiverOf(w).address, "USA"].filter(Boolean).join(", ") : [c?.consigneeCity, c?.consigneeCountry].filter(Boolean).join(", ")}</div></div>
       </div>
       {w.comments && <p className="mt-3"><b>Notes:</b> {w.comments}</p>}
 
