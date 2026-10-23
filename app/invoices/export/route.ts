@@ -2,7 +2,8 @@ import { db, total, paidAmt, balance, wrCode } from "@/lib/wh-store";
 import { tryLoaded } from "@/lib/persist";
 
 export const dynamic = "force-dynamic";
-const q = (v: string | number | undefined) => `"${String(v).replace(/"/g, '""')}"`;
+// Text that starts with = + - @ would run as a formula in Excel (a customer called "=HYPERLINK(...)"): a quote mark in front makes it plain text.
+const q = (v: string | number | undefined) => `"${(typeof v === "string" && /^[=+\-@\t\r]/.test(v) ? "'" + v : String(v)).replace(/"/g, '""')}"`;
 
 // All invoices as a CSV file (for Excel): signed-in people only (the middleware checks the cookie).
 export async function GET() {

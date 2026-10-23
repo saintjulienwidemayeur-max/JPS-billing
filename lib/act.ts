@@ -3,6 +3,8 @@
 import { ensureLoaded, flush, refresh } from "./persist";
 import { requireUser } from "./users";
 import { logAudit, summarize } from "./audit";
+import { BILLING_ACCESS } from "./access";
+import { redirect } from "next/navigation";
 
 const decode = (s: string) => { try { return decodeURIComponent(s.replace(/\+/g, " ")); } catch { return s; } };
 const words = (n: string) => n.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
@@ -11,6 +13,9 @@ export const act = <A extends unknown[]>(name: string, fn: (...a: A) => Promise<
   await ensureLoaded();
   await refresh();
   const user = await requireUser();
+  // The middleware only checks the page a request goes to: the action itself checks that this person may use the billing system at all
+  // (the user-management actions check for an administrator themselves, and everyone may change their own code).
+  if (!user.admin && name !== "changeOwnCode" && !user.perms.includes(BILLING_ACCESS)) { logAudit(user.name, words(name), "", "refused: no access to the billing system"); await flush(); redirect("/?denied=1"); }
   let result = "ok";
   try { await fn(...a); }
   catch (e) {

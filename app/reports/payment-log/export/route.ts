@@ -4,7 +4,8 @@ import { usToIso, isoToday } from "@/lib/clock";
 import { allPayments } from "@/lib/paylist";
 
 export const dynamic = "force-dynamic";
-const q = (v: string | number | undefined) => `"${String(v).replace(/"/g, '""')}"`;
+// Text that starts with = + - @ would run as a formula in Excel (a customer called "=HYPERLINK(...)"): a quote mark in front makes it plain text.
+const q = (v: string | number | undefined) => `"${(typeof v === "string" && /^[=+\-@\t\r]/.test(v) ? "'" + v : String(v)).replace(/"/g, '""')}"`;
 
 // The payment log of a month (and location) as a CSV file.
 export async function GET(req: NextRequest) {
