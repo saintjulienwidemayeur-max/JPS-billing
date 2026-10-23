@@ -6,7 +6,7 @@ export { timeNow };
 import { COMPANY, HAITI, ORIGIN, DESTINATION, AIRLINE, COMPANY_EMAILS, BLOCKED_EMAILS } from "./company";
 
 export type Ship = "Air" | "Ocean";
-export type Item = { id: number; date: string; carrier: string; tracking: string; receiver: string; batch: string; customer?: string; piece?: number; ship?: Ship; shipped?: boolean; wr?: string; clientId?: string; prealert?: string; by?: string; office?: "Haiti" };
+export type Item = { id: number; date: string; carrier: string; tracking: string; receiver: string; batch: string; customer?: string; piece?: number; ship?: Ship; shipped?: boolean; wr?: string; clientId?: string; prealert?: string; made?: boolean; by?: string; office?: "Haiti" };
 export type Piece = { no: number; type: string; l: number; w: number; h: number; lbs: number; contents?: string; by?: string; old?: boolean; rd?: number };
 export type Payment = { date: string; time?: string; amount: number; method: string; ref: string; batch?: string };
 // Money a customer paid beyond what they owed (positive) and credit used later (negative).
@@ -114,7 +114,7 @@ const today = () => usToday();
 type WhDb = {
   items: Item[]; wrs: WR[]; loads: Load[]; shipments: Shipment[]; bookings: Booking[]; orders: Order[]; pickups: Pickup[]; prealerts: Prealert[]; users: User[]; maillog: MailLog[]; audit: AuditEntry[]; oldInvoices: OldInvoice[]; payables: Bill[]; expenses: Expense[]; debts: Debt[]; blockedEmails: string[]; customers: Customer[]; reps: Rep[];
   feeNames: { charge: string[]; credit: string[] }; payMethods: string[]; carriers: string[]; settings: Settings;
-  n: { wr: number; piece: number; item: number; cargo: number; inv: number; batch: number; cust: number; rep: number; fee: number; pay: number; pickup: number; prealert: number; mail: number; user: number; audit: number; bill: number };
+  n: { wr: number; piece: number; item: number; cargo: number; inv: number; batch: number; cust: number; rep: number; fee: number; pay: number; pickup: number; prealert: number; mail: number; user: number; audit: number; nt: number; bill: number };
 };
 const g = globalThis as unknown as { __wh13?: WhDb };
 export const db: WhDb = (g.__wh13 ??= {
@@ -124,7 +124,7 @@ export const db: WhDb = (g.__wh13 ??= {
   ],
   wrs: [], loads: [], shipments: [], bookings: [], orders: [], pickups: [], prealerts: [], users: [], maillog: [], audit: [], oldInvoices: [], payables: [], expenses: [], debts: [], blockedEmails: [...BLOCKED_EMAILS], customers: [], reps: [],
   feeNames: { charge: [...FEE_PRESETS], credit: [...CREDIT_PRESETS] }, payMethods: [...PAY_METHODS], carriers: [...CARRIERS], settings: { ...DEFAULT_SETTINGS },
-  n: { wr: 11018, piece: 20032, item: 3, cargo: 611, inv: 5001, batch: 1, cust: 1001, rep: 1, fee: 1, pay: 1001, pickup: 1, prealert: 1, mail: 1, user: 1, audit: 1, bill: 1 },
+  n: { wr: 11018, piece: 20032, item: 3, cargo: 611, inv: 5001, batch: 1, cust: 1001, rep: 1, fee: 1, pay: 1001, pickup: 1, prealert: 1, mail: 1, user: 1, audit: 1, nt: 1, bill: 1 },
 });
 export const nowStr = today;
 // Cents: half a cent rounds UP (1.13 lb x $4.50 = 5.085 -> 5.09). The tiny extra only cancels binary floating-point error (5.085 is stored as 5.08499999...).
