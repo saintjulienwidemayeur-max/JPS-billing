@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { db, wrCode, total, paidAmt, balance, money, r2, creditOf, orderTotal, orderPaid, orderBalance, debtBalance, debtPaid } from "@/lib/wh-store";
+import { db, wrCode, total, paidAmt, balance, money, r2, creditOf, orderTotal, orderPaid, orderBalance, debtBalance, debtPaid, hasCharges } from "@/lib/wh-store";
 import { usToday, daysSince } from "@/lib/clock";
 import { PrintButton } from "@/components/print-button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   const { no } = await params, q = await searchParams;
   const c = db.customers.find((x) => x.no === Number(no));
   if (!c) notFound();
-  const rows = db.wrs.filter((w) => w.cust === c.no && (w.fees.length > 0 || w.payments.length > 0) && (!q.from || key(w.date) >= q.from) && (!q.to || key(w.date) <= q.to) && (q.show !== "open" || balance(w) > 0))
+  const rows = db.wrs.filter((w) => w.cust === c.no && (hasCharges(w) || w.payments.length > 0) && (!q.from || key(w.date) >= q.from) && (!q.to || key(w.date) <= q.to) && (q.show !== "open" || balance(w) > 0))
     .sort((a, b) => key(a.date).localeCompare(key(b.date)) || Number(a.id) - Number(b.id));
   const orders = db.orders.filter((o) => o.cust === c.no && (!q.from || key(o.date) >= q.from) && (!q.to || key(o.date) <= q.to) && (q.show !== "open" || orderBalance(o) > 0));
   const debts = db.debts.filter((d) => d.cust === c.no && (!q.from || key(d.date) >= q.from) && (!q.to || key(d.date) <= q.to) && (q.show !== "open" || debtBalance(d) > 0));

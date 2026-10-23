@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { db, total, money, wrCode, repLabel } from "@/lib/wh-store";
+import { db, total, money, wrCode, repLabel, hasCharges } from "@/lib/wh-store";
 import { createInvoice } from "@/lib/billing-actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ const th = "px-2 py-1.5 font-semibold", td = "px-2 py-1.5";
 export default async function Page({ searchParams }: { searchParams: SP }) {
   const q = await searchParams;
   const needle = (q.q ?? q.c ?? "").trim().toLowerCase();
-  const todo = db.wrs.filter((w) => !w.invoice && w.pieces.length > 0 && w.fees.length > 0 && (!needle || String(w.cust) === needle || w.customer.toLowerCase().includes(needle) || w.id === needle));
+  const todo = db.wrs.filter((w) => !w.invoice && w.pieces.length > 0 && hasCharges(w) && (!needle || String(w.cust) === needle || w.customer.toLowerCase().includes(needle) || w.id === needle));
   const shown = todo.slice(0, 100);
   return (
     <main className="mx-auto max-w-5xl px-4 py-6">

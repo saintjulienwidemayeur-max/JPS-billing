@@ -236,6 +236,8 @@ export const insuranceFee = (w: WR) => (w.insurance === "Accepted" ? quote(w).cu
 export const total = (w: WR) => Math.max(0, r2(charges(w) + insuranceFee(w) - credits(w)));
 export const paidAmt = (w: WR) => r2(w.payments.reduce((a, p) => a + p.amount, 0));
 export const balance = (w: WR) => r2(total(w) - paidAmt(w));
+// A receipt that has something to pay: fee lines, or freight / insurance worked out from its pieces (an Air receipt may have no fee line at all).
+export const hasCharges = (w: WR) => w.fees.length > 0 || freightFee(w) > 0 || insuranceFee(w) > 0;
 export const payStatus = (w: WR) => (paidAmt(w) <= 0 ? (total(w) <= 0 && w.fees.length ? "No charge" : "Unpaid") : balance(w) <= 0 ? "Paid in full" : "Partially paid");
 export const money = (n: number) => `${n < 0 ? "-" : ""}$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 

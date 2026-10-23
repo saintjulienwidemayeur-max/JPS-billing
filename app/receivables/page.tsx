@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { db, balance, wrCode, money, r2, repLabel, creditOf, orderBalance, debtBalance } from "@/lib/wh-store";
+import { db, balance, wrCode, money, r2, repLabel, creditOf, orderBalance, debtBalance, hasCharges } from "@/lib/wh-store";
 import { isoToday, usToIso, daysSince } from "@/lib/clock";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
   ].filter((x) => x.p.method !== "Customer credit" && usToIso(x.p.date) >= from && usToIso(x.p.date) <= to);
   const sumBy = (key: (x: Pay) => string) => { const m = new Map<string, number>(); for (const x of pays) m.set(key(x), r2((m.get(key(x)) ?? 0) + x.p.amount)); return [...m].sort((a, b) => b[1] - a[1]); };
   const collected = r2(pays.reduce((a, x) => a + x.p.amount, 0));
-  const owing = db.wrs.filter((w) => w.fees.length > 0 && balance(w) > 0), owingDebts = db.debts.filter((d) => debtBalance(d) > 0);
+  const owing = db.wrs.filter((w) => hasCharges(w) && balance(w) > 0), owingDebts = db.debts.filter((d) => debtBalance(d) > 0);
   const buckets = [["0-30 days", 0, 30], ["31-60 days", 31, 60], ["61-90 days", 61, 90], ["Over 90 days", 91, 99999]] as const;
   const aged = buckets.map(([label, lo, hi]) => [label, r2(owing.filter((w) => { const d = daysSince(w.date); return d >= lo && d <= hi; }).reduce((a, w) => a + balance(w), 0) + owingDebts.filter((x) => { const d = daysSince(x.date); return d >= lo && d <= hi; }).reduce((a, x) => a + debtBalance(x), 0))] as const);
   const owingOrders = db.orders.filter((o) => orderBalance(o) > 0);

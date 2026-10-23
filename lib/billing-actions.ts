@@ -1,6 +1,6 @@
 "use server";
 import { redirect } from "next/navigation";
-import { db, nowStr, balance, money, wrCode, r2, findCustomer, newCustomer, repOf, timeNow, creditOf, custOf, newOrderId, orderBalance, ORDER_FEE_PCT, ORDER_STATUSES, type Order, type OrderStatus, remember as rememberName, billBalance, debtBalance, type Debt, type Expense } from "./wh-store";
+import { db, nowStr, balance, money, wrCode, r2, findCustomer, newCustomer, repOf, timeNow, creditOf, custOf, newOrderId, orderBalance, ORDER_FEE_PCT, ORDER_STATUSES, type Order, type OrderStatus, remember as rememberName, billBalance, debtBalance, type Debt, type Expense, hasCharges } from "./wh-store";
 import { act } from "./act";
 import { requireUser } from "./users";
 import { queueMail, emailInvoice, emailOrder } from "./auto-mail";
@@ -21,6 +21,7 @@ export const createInvoice = act("createInvoice", async (f: F) => {
   const w = db.wrs.find((x) => x.id === s(f, "wr"));
   if (!w) return;
   if (!w.pieces.length) back("/invoices/new", { err: "Add at least one piece to the receipt (in the warehouse app) before invoicing." });
+  if (!w.invoice) for (const p of w.pieces) p.old ??= false; // the formula of today is pinned: a restart must not turn it into the old 139 / 1728 and change the invoice
   if (!w.invoice) { w.invoice = `INV-${db.n.inv++}`; w.invoiceDate = nowStr(); queueMail(() => emailInvoice(w)); } // the invoice (PDF) is e-mailed by itself
   back(`/invoices/${w.invoice}`, { ok: `Invoice ${w.invoice} created.` });
 });
@@ -61,7 +62,7 @@ export const receivePayment = act("receivePayment", async (f: F) => {
   // Receipts with a balance and the balances that are on no invoice (account balances): all paid oldest first.
   type Item = { date: string; id: string; w?: (typeof db.wrs)[number]; d?: Debt };
   const items: Item[] = [
-    ...db.wrs.filter((w) => w.cust === c!.no && w.fees.length > 0 && balance(w) > 0).map((w) => ({ date: w.date, id: w.id, w })),
+    ...db.wrs.filter((w) => w.cust === c!.no && hasCharges(w) && balance(w) > 0).map((w) => ({ date: w.date, id: w.id, w })),
     ...db.debts.filter((d) => d.cust === c!.no && debtBalance(d) > 0).map((d) => ({ date: d.date, id: d.id, d })),
   ].sort((a, b) => usToIso(a.date).localeCompare(usToIso(b.date)) || a.id.localeCompare(b.id, undefined, { numeric: true }));
   for (const it of items) {

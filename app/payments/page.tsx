@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { WhLink } from "@/components/wh-link";
-import { db, creditOf, balance, total, wrCode, money, r2, debtBalance } from "@/lib/wh-store";
+import { db, creditOf, balance, total, wrCode, money, r2, debtBalance, hasCharges } from "@/lib/wh-store";
 import { usToIso } from "@/lib/clock";
 import { receivePayment, addPayment, applyCredit } from "@/lib/billing-actions";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,7 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
   const q = await searchParams;
   const inv = q.inv ? db.wrs.find((w) => w.invoice === q.inv) : undefined;
   const c = inv ? db.customers.find((x) => x.no === inv.cust) : db.customers.find((x) => x.no === Number(q.c) || x.name.toLowerCase() === (q.c ?? "").toLowerCase());
-  const open = c ? db.wrs.filter((w) => w.cust === c.no && w.fees.length > 0 && balance(w) > 0).sort((a, b) => usToIso(a.date).localeCompare(usToIso(b.date)) || Number(a.id) - Number(b.id)) : [];
+  const open = c ? db.wrs.filter((w) => w.cust === c.no && hasCharges(w) && balance(w) > 0).sort((a, b) => usToIso(a.date).localeCompare(usToIso(b.date)) || Number(a.id) - Number(b.id)) : [];
   const openDebts = c ? db.debts.filter((d) => d.cust === c.no && debtBalance(d) > 0) : [];
   const owed = r2(open.reduce((a, w) => a + balance(w), 0) + openDebts.reduce((a, d) => a + debtBalance(d), 0));
   return (

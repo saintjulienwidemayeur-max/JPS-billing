@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { db, balance, total, paidAmt, wrCode, money, r2, creditOf, payStatus, oldBalance, oldOpen, debtBalance, debtPaid } from "@/lib/wh-store";
+import { db, balance, total, paidAmt, wrCode, money, r2, creditOf, payStatus, oldBalance, oldOpen, debtBalance, debtPaid, hasCharges } from "@/lib/wh-store";
 import { WhLink } from "@/components/wh-link";
 import { addDebt, payDebt, deleteDebt } from "@/lib/billing-actions";
 import { isoToday } from "@/lib/clock";
@@ -16,7 +16,7 @@ export default async function Page({ params }: { params: P }) {
   const no = Number((await params).no);
   const c = db.customers.find((x) => x.no === no);
   if (!c) notFound();
-  const wrs = db.wrs.filter((w) => w.cust === no && w.fees.length > 0);
+  const wrs = db.wrs.filter((w) => w.cust === no && hasCharges(w));
   const invoiced = wrs.filter((w) => w.invoice), notInvoiced = wrs.filter((w) => !w.invoice && w.pieces.length > 0);
   const billed = r2(invoiced.reduce((a, w) => a + total(w), 0)), paid = r2(invoiced.reduce((a, w) => a + paidAmt(w), 0)), invOwes = r2(invoiced.reduce((a, w) => a + Math.max(0, balance(w)), 0)), debts = db.debts.filter((d) => d.cust === no), debtOwed = r2(debts.reduce((a, d) => a + Math.max(0, debtBalance(d)), 0)), owes = r2(invOwes + debtOwed);
   const olds = db.oldInvoices.filter((o) => o.cust === no), oldOwed = r2(olds.filter(oldOpen).reduce((a, o) => a + oldBalance(o), 0));
