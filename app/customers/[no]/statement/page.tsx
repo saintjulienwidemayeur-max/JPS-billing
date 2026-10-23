@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { db, wrCode, total, paidAmt, balance, money, r2, creditOf, orderTotal, orderPaid, orderBalance, debtBalance, debtPaid } from "@/lib/wh-store";
+import { db, wrCode, total, paidAmt, balance, money, r2, creditOf, orderTotal, orderPaid, orderBalance, debtBalance, debtPaid , priced } from "@/lib/wh-store";
 import { usToday, daysSince } from "@/lib/clock";
 import { PrintButton } from "@/components/print-button";
 import { Input } from "@/components/ui/input";
@@ -14,11 +14,13 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   const { no } = await params, q = await searchParams;
   const c = db.customers.find((x) => x.no === Number(no));
   if (!c) notFound();
-  const rows = db.wrs.filter((w) => w.cust === c.no && (w.fees.length > 0 || w.payments.length > 0) && (!q.from || key(w.date) >= q.from) && (!q.to || key(w.date) <= q.to) && (q.show !== "open" || balance(w) > 0))
+  const rows = db.wrs.filter((w) => w.cust === c.no && (priced(w) || w.payments.length > 0) && (!q.from || key(w.date) >= q.from) && (!q.to || key(w.date) <= q.to) && (q.show !== "open" || balance(w) > 0))
     .sort((a, b) => key(a.date).localeCompare(key(b.date)) || Number(a.id) - Number(b.id));
   const orders = db.orders.filter((o) => o.cust === c.no && (!q.from || key(o.date) >= q.from) && (!q.to || key(o.date) <= q.to) && (q.show !== "open" || orderBalance(o) > 0));
   const debts = db.debts.filter((d) => d.cust === c.no && (!q.from || key(d.date) >= q.from) && (!q.to || key(d.date) <= q.to) && (q.show !== "open" || debtBalance(d) > 0));
   const billed = r2(rows.reduce((a, w) => a + total(w), 0) + orders.reduce((a, o) => a + orderTotal(o), 0) + debts.reduce((a, d) => a + d.amount, 0)), paid = r2(rows.reduce((a, w) => a + paidAmt(w), 0) + orders.reduce((a, o) => a + orderPaid(o), 0) + debts.reduce((a, d) => a + debtPaid(d), 0));
+  // What is unpaid, with its date: receipts, orders and account balances, so the age columns add up to the balance due.
+  const open = [...rows.map((w) => ({ date: w.date, owed: balance(w) })), ...orders.map((o) => ({ date: o.date, owed: orderBalance(o) })), ...debts.map((d) => ({ date: d.date, owed: debtBalance(d) }))].filter((x) => x.owed > 0);
   return (
     <main className="mx-auto max-w-4xl px-4 py-6 text-sm">
       <div className="flex items-start justify-between gap-4">
@@ -55,7 +57,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
       <p className="mt-4 text-right text-lg font-bold">Balance due: {money(r2(billed - paid))}</p>
       {creditOf(c) > 0 && <p className="text-right">Credit on file: <b>{money(creditOf(c))}</b></p>}
       <table className="mt-4 ml-auto text-xs"><thead><tr>{["0-30 days", "31-60", "61-90", "Over 90"].map((h) => <th key={h} className="px-3 py-1 text-right font-semibold text-zinc-600">{h}</th>)}</tr></thead>
-        <tbody><tr>{([[0, 30], [31, 60], [61, 90], [91, 99999]] as const).map(([lo, hi]) => <td key={lo} className="px-3 py-1 text-right">{money(r2(rows.filter((w) => { const d = daysSince(w.date); return d >= lo && d <= hi && balance(w) > 0; }).reduce((a, w) => a + balance(w), 0)))}</td>)}</tr></tbody></table>
+        <tbody><tr>{([[0, 30], [31, 60], [61, 90], [91, 99999]] as const).map(([lo, hi]) => <td key={lo} className="px-3 py-1 text-right">{money(r2(open.filter((x) => { const d = daysSince(x.date); return d >= lo && d <= hi; }).reduce((a, x) => a + x.owed, 0)))}</td>)}</tr></tbody></table>
     </main>
   );
 }

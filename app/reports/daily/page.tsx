@@ -19,7 +19,7 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
     <main className="mx-auto max-w-4xl px-4 py-6 text-sm">
       <div className="no-print">
         <h1>Daily payment report</h1>
-        <form className="mt-3 flex flex-wrap items-center gap-2"><label className="text-xs text-zinc-600">Day <Input name="day" type="date" defaultValue={day} className="w-44" /></label><Button type="submit" variant="outline">Show</Button><PrintButton label="Print the report" /></form>
+        <form className="mt-3 flex flex-wrap items-center gap-2"><label className="text-xs text-zinc-600">Day <Input name="day" type="date" defaultValue={day} className="w-44" /></label><Button type="submit" variant="outline">Show</Button><a href={`/reports/daily/export?day=${day}`} className="text-sm font-medium text-brand underline">Download CSV</a><PrintButton label="Print the report" /></form>
       </div>
       <div className="mt-4 flex items-start justify-between gap-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}

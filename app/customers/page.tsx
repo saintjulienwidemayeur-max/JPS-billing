@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { db, balance, money, r2, creditOf, debtBalance } from "@/lib/wh-store";
+import { db, money, creditOf, owesOf } from "@/lib/wh-store";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -10,11 +10,10 @@ const th = "px-2 py-1.5 font-semibold", td = "px-2 py-1.5";
 
 export default async function Page({ searchParams }: { searchParams: SP }) {
   const q = await searchParams;
-  const needle = (q.q ?? "").trim().toLowerCase();
-  const owed = new Map<number, number>();
-  for (const w of db.wrs) if (w.invoice) owed.set(w.cust, r2((owed.get(w.cust) ?? 0) + Math.max(0, balance(w))));
-  for (const d of db.debts) owed.set(d.cust, r2((owed.get(d.cust) ?? 0) + Math.max(0, debtBalance(d))));
-  const all = db.customers.filter((c) => (!needle || String(c.no) === needle || [c.name, c.phone, c.email, c.box ?? ""].some((v) => v.toLowerCase().includes(needle))) && (q.show !== "owing" || (owed.get(c.no) ?? 0) > 0));
+  const needle = (q.q ?? "").trim().toLowerCase(), digits = needle.replace(/\D/g, ""); // a phone typed as 305-555-0142 finds +1 (305) 555 0142
+  // The same "owes" as the Receivables page: receipts (invoiced or not), orders and account balances.
+  const owed = new Map(db.customers.map((c) => [c.no, owesOf(c.no).total] as const));
+  const all = db.customers.filter((c) => (!needle || String(c.no) === needle || [c.name, c.phone, c.email, c.box ?? ""].some((v) => v.toLowerCase().includes(needle)) || (digits.length >= 4 && [c.phone, c.whatsapp ?? "", c.altPhone ?? ""].some((v) => v.replace(/\D/g, "").includes(digits)))) && (q.show !== "owing" || (owed.get(c.no) ?? 0) > 0));
   const pages = Math.max(1, Math.ceil(all.length / PER)), page = Math.min(pages, Math.max(1, Number(q.page) || 1));
   const rows = all.slice((page - 1) * PER, page * PER);
   const link = (p: number) => `/customers?${new URLSearchParams({ ...(q.q && { q: q.q }), ...(q.show && { show: q.show }), page: String(p) })}`;

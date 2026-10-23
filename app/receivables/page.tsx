@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { db, balance, wrCode, money, r2, repLabel, creditOf, orderBalance, debtBalance } from "@/lib/wh-store";
+import { db, balance, wrCode, money, r2, repLabel, creditOf, orderBalance, debtBalance, priced, owesOf } from "@/lib/wh-store";
 import { isoToday, usToIso, daysSince } from "@/lib/clock";
+import { allPayments, type Pay } from "@/lib/paylist";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -12,21 +13,17 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
   const q = await searchParams;
   const today = isoToday(), from = q.from || `${today.slice(0, 8)}01`, to = q.to || today;
   // Money that really came in: payments on receipts and orders (not credit being used) plus overpayments kept as credit.
-  type Pay = { customer: string; rep: string; label: string; href: string; p: { date: string; time?: string; amount: number; method: string; ref: string } };
-  const pays: Pay[] = [
-    ...db.wrs.flatMap((w) => w.payments.map((p, i) => ({ customer: w.customer, rep: w.rep, label: wrCode(w), href: p.batch ? `/payments/${p.batch}` : `/receipts/${w.id}/payments/${i}`, p }))),
-    ...db.orders.flatMap((o) => o.payments.map((p, i) => ({ customer: o.customer, rep: o.rep, label: `Order #${o.id}`, href: `/orders/${o.id}/payments/${i}`, p }))),
-    ...db.debts.flatMap((d) => d.payments.map((p) => ({ customer: d.customer, rep: d.rep, label: `Account balance ${d.id}`, href: p.batch ? `/payments/${p.batch}` : `/customers/${d.cust}`, p }))),
-    ...db.customers.flatMap((c) => (c.creditLog ?? []).filter((e) => e.amount > 0 && e.method).map((e) => ({ customer: c.name, rep: c.rep, label: "Credit", href: `/payments/${e.batch}`, p: { date: e.date, time: e.time, amount: e.amount, method: e.method!, ref: e.ref ?? "" } }))),
-  ].filter((x) => x.p.method !== "Customer credit" && usToIso(x.p.date) >= from && usToIso(x.p.date) <= to);
+  const pays = allPayments().filter((x) => usToIso(x.p.date) >= from && usToIso(x.p.date) <= to);
   const sumBy = (key: (x: Pay) => string) => { const m = new Map<string, number>(); for (const x of pays) m.set(key(x), r2((m.get(key(x)) ?? 0) + x.p.amount)); return [...m].sort((a, b) => b[1] - a[1]); };
   const collected = r2(pays.reduce((a, x) => a + x.p.amount, 0));
-  const owing = db.wrs.filter((w) => w.fees.length > 0 && balance(w) > 0), owingDebts = db.debts.filter((d) => debtBalance(d) > 0);
+  const owing = db.wrs.filter((w) => priced(w) && balance(w) > 0), owingDebts = db.debts.filter((d) => debtBalance(d) > 0);
   const buckets = [["0-30 days", 0, 30], ["31-60 days", 31, 60], ["61-90 days", 61, 90], ["Over 90 days", 91, 99999]] as const;
-  const aged = buckets.map(([label, lo, hi]) => [label, r2(owing.filter((w) => { const d = daysSince(w.date); return d >= lo && d <= hi; }).reduce((a, w) => a + balance(w), 0) + owingDebts.filter((x) => { const d = daysSince(x.date); return d >= lo && d <= hi; }).reduce((a, x) => a + debtBalance(x), 0))] as const);
   const owingOrders = db.orders.filter((o) => orderBalance(o) > 0);
+  // Every unpaid amount has a date and a balance: receipts, account balances and orders, so the four columns add up to "Still owed".
+  const open: { date: string; owed: number }[] = [...owing.map((w) => ({ date: w.date, owed: balance(w) })), ...owingDebts.map((d) => ({ date: d.date, owed: debtBalance(d) })), ...owingOrders.map((o) => ({ date: o.date, owed: orderBalance(o) }))];
+  const aged = buckets.map(([label, lo, hi]) => [label, r2(open.filter((x) => { const d = daysSince(x.date); return d >= lo && d <= hi; }).reduce((a, x) => a + x.owed, 0))] as const);
   const outstanding = r2(owing.reduce((a, w) => a + balance(w), 0) + owingOrders.reduce((a, o) => a + orderBalance(o), 0) + owingDebts.reduce((a, d) => a + debtBalance(d), 0));
-  const debtors = [...new Map([...owing.map((w) => [w.cust, w.customer] as const), ...owingDebts.map((d) => [d.cust, d.customer] as const)]).entries()].map(([no, name]) => ({ no, name, owed: r2(owing.filter((w) => w.cust === no).reduce((a, w) => a + balance(w), 0) + owingDebts.filter((d) => d.cust === no).reduce((a, d) => a + debtBalance(d), 0)) })).sort((a, b) => b.owed - a.owed);
+  const debtors = [...new Map([...owing.map((w) => [w.cust, w.customer] as const), ...owingDebts.map((d) => [d.cust, d.customer] as const), ...owingOrders.map((o) => [o.cust, o.customer] as const)]).entries()].map(([no, name]) => ({ no, name, owed: owesOf(no).total })).sort((a, b) => b.owed - a.owed);
   const credits = r2(db.customers.reduce((a, c) => a + Math.max(0, creditOf(c)), 0));
   return (
     <main className="mx-auto max-w-5xl px-4 py-6">
@@ -38,7 +35,7 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
         <div className="rounded-lg border p-3"><div className="text-xs text-zinc-500">Customer credit held</div><div className="text-2xl font-bold">{money(credits)}</div></div>
       </section>
 
-      <h2 className="mt-6 font-bold">How old the unpaid balances are</h2>
+      <h2 className="mt-6 font-bold">How old the unpaid balances are <a href="/receivables/export" className="ml-2 text-sm font-medium text-brand underline">Download CSV</a></h2>
       <table className="mt-2 w-full text-left text-sm"><thead><tr>{aged.map(([l]) => <th key={l} className={th}>{l}</th>)}</tr></thead><tbody><tr>{aged.map(([l, v]) => <td key={l} className={`${td} font-medium`}>{money(v)}</td>)}</tr></tbody></table>
 
       <h2 className="mt-6 font-bold">Who owes</h2>
