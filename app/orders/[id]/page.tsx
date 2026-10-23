@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { db, ORDER_STATUSES, orderLine, orderSubtotal, orderFee, orderTotal, orderPaid, orderBalance, orderNotes, money } from "@/lib/wh-store";
 import { saveOrder, addOrderItem, saveOrderItems, deleteOrderItem, addOrderPayment, voidOrderPayment, notifyOrderEmail } from "@/lib/billing-actions";
+import { ConfirmSubmit } from "@/components/confirm-submit";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -77,7 +78,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
               <tr key={i} className="border-b border-zinc-100">
                 <td className={td}>{p.date}{p.time && ` ${p.time}`}</td><td className={td}>{p.method}</td><td className={td}>{p.ref || "–"}</td><td className={td}>{money(p.amount)}</td>
                 <td className={td}><Link href={`/orders/${o.id}/payments/${i}`} className="text-brand underline">Payment receipt</Link></td>
-                <td className={td}><form><button formAction={voidOrderPayment.bind(null, o.id, i)} className="text-red-700 underline" aria-label={`Void order payment ${i + 1}`}>Void</button></form></td>
+                <td className={td}><form><ConfirmSubmit plain formAction={voidOrderPayment.bind(null, o.id, i)} aria-label={`Void order payment ${i + 1}`} message={`Void this payment of ${money(p.amount)} (${p.method})?`}>Void</ConfirmSubmit></form></td>
               </tr>))}</tbody>
           </table>
         )}
@@ -95,7 +96,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
 
       <section className="mt-5 rounded-lg border p-3">
         <h2 className="font-bold">Follow the order</h2>
-        <form action={saveOrder} className="mt-2 grid gap-2 sm:grid-cols-4">
+        <form key={`${o.status}|${o.feePct}|${o.tracking}|${o.rep}|${o.notes}`} action={saveOrder} className="mt-2 grid gap-2 sm:grid-cols-4">
           <input type="hidden" name="order" value={o.id} />
           <F label="Status"><select name="status" defaultValue={o.status} className={sel}>{ORDER_STATUSES.map((s) => <option key={s}>{s}</option>)}</select></F>
           <F label="Purchasing fee (%)"><Input name="feePct" type="number" step="0.01" min="0" max="100" defaultValue={o.feePct} /></F>

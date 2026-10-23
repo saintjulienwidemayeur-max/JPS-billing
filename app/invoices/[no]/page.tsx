@@ -40,7 +40,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
         <a href={`/invoices/${encodeURIComponent(w.invoice ?? "")}/pdf`} target="_blank" className="inline-flex h-9 items-center rounded-md border border-zinc-300 bg-white px-3 font-medium">Download PDF</a>
         <a href={`/payments?inv=${w.invoice}`} className="inline-flex h-9 items-center rounded-md border border-zinc-300 bg-white px-3 font-medium">Enter payment</a>
         <form><button formAction={notifyInvoiceEmail.bind(null, w.id)} className="inline-flex h-9 items-center rounded-md border border-brand bg-brand px-3 font-medium text-white">Notify by e-mail</button></form>
-        <form className="ml-auto"><button formAction={cancelInvoice.bind(null, w.id)} className="text-red-700 underline">Cancel invoice</button></form>
+        <form className="ml-auto"><ConfirmSubmit plain formAction={cancelInvoice.bind(null, w.id)} message={`Cancel invoice ${w.invoice}? The receipt goes back to "waiting for an invoice".`}>Cancel invoice</ConfirmSubmit></form>
       </div>
       <p className={`no-print mt-2 text-xs ${w.invoiceSent ? "text-green-700" : w.invoiceMail?.error ? "text-amber-800" : "text-zinc-500"}`}>
         {w.invoiceSent ? `E-mailed to the customer by itself on ${w.invoiceSent} (PDF attached).` : w.invoiceMail?.error ? `Not e-mailed: ${w.invoiceMail.error}${w.invoiceMail.tries < 4 ? " It will be tried again by itself." : ""}` : "The invoice is e-mailed to the customer by itself a few seconds after it is made."}

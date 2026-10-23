@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { WhLink } from "@/components/wh-link";
-import { db, creditOf, balance, total, wrCode, money, r2, debtBalance } from "@/lib/wh-store";
+import { db, creditOf, balance, total, wrCode, money, r2, debtBalance , priced } from "@/lib/wh-store";
 import { usToIso } from "@/lib/clock";
 import { receivePayment, addPayment, applyCredit } from "@/lib/billing-actions";
 import { Input } from "@/components/ui/input";
@@ -13,8 +13,12 @@ const th = "px-2 py-1 font-semibold", td = "px-2 py-1";
 export default async function Page({ searchParams }: { searchParams: SP }) {
   const q = await searchParams;
   const inv = q.inv ? db.wrs.find((w) => w.invoice === q.inv) : undefined;
-  const c = inv ? db.customers.find((x) => x.no === inv.cust) : db.customers.find((x) => x.no === Number(q.c) || x.name.toLowerCase() === (q.c ?? "").toLowerCase());
-  const open = c ? db.wrs.filter((w) => w.cust === c.no && w.fees.length > 0 && balance(w) > 0).sort((a, b) => usToIso(a.date).localeCompare(usToIso(b.date)) || Number(a.id) - Number(b.id)) : [];
+  // The customer: by number or exact name, else by part of a name, e-mail, box or phone (digits only: 305-555-0142 finds +1 (305) 555 0142); several matches are listed.
+  const needle = (q.c ?? "").trim().toLowerCase(), digits = needle.replace(/\D/g, "");
+  const exact = inv ? db.customers.find((x) => x.no === inv.cust) : db.customers.find((x) => String(x.no) === needle || x.name.toLowerCase() === needle);
+  const matches = inv || exact || !needle ? [] : db.customers.filter((x) => [x.name, x.email, x.box ?? ""].some((v) => v.toLowerCase().includes(needle)) || (digits.length >= 4 && [x.phone, x.whatsapp ?? "", x.altPhone ?? ""].some((v) => v.replace(/\D/g, "").includes(digits))));
+  const c = exact ?? (matches.length === 1 ? matches[0] : undefined);
+  const open = c ? db.wrs.filter((w) => w.cust === c.no && priced(w) && balance(w) > 0).sort((a, b) => usToIso(a.date).localeCompare(usToIso(b.date)) || Number(a.id) - Number(b.id)) : [];
   const openDebts = c ? db.debts.filter((d) => d.cust === c.no && debtBalance(d) > 0) : [];
   const owed = r2(open.reduce((a, w) => a + balance(w), 0) + openDebts.reduce((a, d) => a + debtBalance(d), 0));
   return (
@@ -48,11 +52,12 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
       )}
       {q.inv && !inv && <p className="mt-3 text-sm text-red-700">No invoice {q.inv}.</p>}
       <form method="get" className="mt-4 flex gap-2">
-        <Input name="c" list="cust" defaultValue={c ? c.name : q.c} placeholder="Customer (name or number)" aria-label="Customer" required />
+        <Input name="c" list="cust" defaultValue={c ? c.name : q.c} placeholder="Customer (name, number or phone)" aria-label="Customer" required />
         <datalist id="cust">{db.customers.map((x) => <option key={x.no} value={x.no}>{x.name}</option>)}</datalist>
         <Button type="submit" variant="outline">Find</Button>
       </form>
-      {q.c && !c && <p className="mt-3 text-sm text-red-700">No customer matches &quot;{q.c}&quot;.</p>}
+      {q.c && !c && matches.length === 0 && <p className="mt-3 text-sm text-red-700">No customer matches &quot;{q.c}&quot;.</p>}
+      {matches.length > 1 && <ul className="mt-3 grid gap-1 text-sm">{matches.slice(0, 12).map((x) => <li key={x.no}><Link href={`/payments?c=${x.no}`} className="text-brand underline">{x.name}</Link> <span className="text-zinc-500">· customer {x.no}{x.phone && ` · ${x.phone}`}</span></li>)}{matches.length > 12 && <li className="text-zinc-500">…and {matches.length - 12} more: type more of the name.</li>}</ul>}
       {c && (
         <section className="mt-5 rounded-lg border p-3">
           <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-bold">{c.name} <span className="text-sm font-normal text-zinc-500">· customer {c.no}</span></h2><Link href={`/customers/${c.no}/statement`} className="text-sm text-brand underline">Statement</Link></div>

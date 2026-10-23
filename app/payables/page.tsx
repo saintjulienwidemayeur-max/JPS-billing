@@ -1,4 +1,5 @@
 import { db, money, r2, billPaid, billBalance, BILL_CATEGORIES } from "@/lib/wh-store";
+import { ConfirmSubmit } from "@/components/confirm-submit";
 import { isoToday, usToIso } from "@/lib/clock";
 import { addBill, payBill, deleteBill } from "@/lib/billing-actions";
 import { Input } from "@/components/ui/input";
@@ -45,7 +46,7 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
           <tbody>{open.map((b) => (
             <tr key={b.id} className="border-b border-zinc-100 align-top"><td className={`${td} whitespace-nowrap ${usToIso(b.due) < today ? "font-semibold text-red-700" : ""}`}>{b.due}</td><td className={td}>{b.vendor}{b.shipment && <span className="block text-xs text-zinc-500">Cargo {b.shipment}</span>}{b.notes && <span className="block text-xs text-zinc-500">{b.notes}</span>}</td><td className={td}>{b.category}</td><td className={td}>{b.ref || b.id}</td><td className={td}>{money(b.amount)}</td><td className={`${td} font-medium`}>{money(billBalance(b))}</td>
               <td className={td}><form action={payBill} className="flex gap-1"><input type="hidden" name="id" value={b.id} /><Input name="amount" type="number" step="0.01" min="0.01" max={billBalance(b)} defaultValue={billBalance(b)} className="w-24 text-right" aria-label="Amount" /><Input name="method" list="payMethods" placeholder="Paid by" className="w-28" required aria-label="Paid by" /><Button type="submit" variant="outline">Pay</Button></form>
-                {b.payments.length === 0 && <form action={deleteBill.bind(null, b.id)}><button className="mt-1 text-xs text-red-700 underline">Delete</button></form>}</td></tr>))}</tbody></table>
+                {b.payments.length === 0 && <form action={deleteBill.bind(null, b.id)}><ConfirmSubmit plain className="mt-1 text-xs" message={`Delete the bill of ${b.vendor} (${money(b.amount)})?`}>Delete</ConfirmSubmit></form>}</td></tr>))}</tbody></table>
       )}
       <datalist id="payMethods">{db.payMethods.map((m) => <option key={m} value={m} />)}</datalist>
       {paid.length > 0 && (<>

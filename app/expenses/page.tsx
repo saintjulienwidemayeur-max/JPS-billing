@@ -1,4 +1,5 @@
 import { db, money, r2, total, expenseOf, CARGO_EXPENSE_CATEGORIES, DAILY_EXPENSE_CATEGORIES } from "@/lib/wh-store";
+import { ConfirmSubmit } from "@/components/confirm-submit";
 import { isoToday, usToIso } from "@/lib/clock";
 import { addExpense, deleteExpense } from "@/lib/billing-actions";
 import { PrintButton } from "@/components/print-button";
@@ -77,7 +78,7 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
         <table className="mt-2 w-full text-left"><thead className="border-b-2 border-black"><tr>{["Date", "For", "Category", "Paid to", "Paid by", "Notes", "Amount", ""].map((h, i) => <th key={i} className={`${th} ${i === 6 ? "text-right" : ""}`}>{h}</th>)}</tr></thead>
           <tbody>{shown.map((e) => (
             <tr key={e.id} className="border-b border-zinc-100 align-top"><td className={`${td} whitespace-nowrap`}>{e.date}</td><td className={td}>{e.shipment ? <a href={`/expenses?view=${encodeURIComponent(e.shipment)}`} className="text-brand underline">{e.shipment}</a> : "Everyday"}</td><td className={td}>{e.category}</td><td className={td}>{e.payee || "–"}</td><td className={td}>{e.method || "–"}</td><td className={`${td} text-xs text-zinc-600`}>{e.notes}{e.by && <span className="block text-zinc-400">{e.by}</span>}</td><td className={`${td} text-right font-medium`}>{money(e.amount)}</td>
-              <td className={`${td} no-print`}><form action={deleteExpense.bind(null, e.id)}><button className="text-xs text-red-700 underline" aria-label="Delete this expense">Delete</button></form></td></tr>))}
+              <td className={`${td} no-print`}><form action={deleteExpense.bind(null, e.id)}><ConfirmSubmit plain className="text-xs" aria-label="Delete this expense" message={`Delete this expense of ${money(e.amount)} (${e.category})?`}>Delete</ConfirmSubmit></form></td></tr>))}
             <tr className="font-bold"><td className={td} colSpan={6}>Total</td><td className={`${td} text-right`}>{money(sum(shown))}</td><td /></tr></tbody></table>
       )}
       {cats.size > 1 && <p className="mt-2 text-xs text-zinc-600">By category: {[...cats].sort((a, b) => b[1] - a[1]).map(([c, v]) => `${c} ${money(v)}`).join(" · ")}</p>}
