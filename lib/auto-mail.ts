@@ -83,7 +83,7 @@ const log = (subject: string, to: string, error?: string) => {
 // `force` (the "Notify by e-mail" button) sends again even if it was already sent. Returns an error text, or "".
 export async function emailInvoice(w: WR, force = false): Promise<string> {
   if (!w.invoice || (w.invoiceSent && !force)) return "";
-  if (!force) waInvoice(w, balance(w)); // WhatsApp (short text), even when there is no usable e-mail
+  if (!force) waInvoice(w, balance(w), async () => ({ name: `Invoice-${w.invoice}.pdf`, bytes: await invoicePdf(w) })); // WhatsApp (short text), even when there is no usable e-mail
   const tries = (w.invoiceMail?.tries ?? 0) + 1;
   const fail = (e: string, again: boolean) => { w.invoiceMail = { error: e, tries: again ? tries : 99, at: `${nowStr()} ${timeNow()}` }; };
   const c = custOf(w), lang = (c?.lang === "en" || c?.lang === "es" ? c.lang : "fr") as Lang, tx = T[lang];

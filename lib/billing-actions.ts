@@ -4,7 +4,8 @@ import { db, nowStr, charges, balance, money, wrCode, r2, findCustomer, newCusto
 import { act } from "./act";
 import { requireUser } from "./users";
 import { queueMail, emailInvoice, emailOrder } from "./auto-mail";
-import { waNowInvoice, waNowOrder } from "./whatsapp";
+import { waNowInvoice, waNowOrder, waFailed, waSay } from "./whatsapp";
+import { invoicePdf, orderPdf } from "./pdf";
 import { usToIso, isoToUs } from "./clock";
 
 // The billing app's actions: invoices, payments, credit and purchase orders. Every one goes through act(): loaded, signed in, logged, saved.
@@ -255,9 +256,9 @@ export const notifyInvoiceEmail = act("notifyInvoiceEmail", async (wr: string) =
   if (!w?.invoice) return;
   const to = `/invoices/${encodeURIComponent(w.invoice)}`;
   // ONE button: the e-mail (PDF) and the WhatsApp message go together.
-  const err = await emailInvoice(w, true), waErr = await waNowInvoice(w, balance(w));
-  if (err && waErr) back(to, { err: `Nothing was sent. E-mail: ${err}. WhatsApp: ${waErr}.` });
-  back(to, { ok: `${err ? `E-mail NOT sent (${err})` : "E-mail sent"}. ${waErr ? `WhatsApp NOT sent (${waErr}).` : "WhatsApp sent."}` });
+  const err = await emailInvoice(w, true), waErr = await waNowInvoice(w, balance(w), async () => ({ name: `Invoice-${w.invoice}.pdf`, bytes: await invoicePdf(w) }));
+  if (err && waFailed(waErr)) back(to, { err: `Nothing was sent. E-mail: ${err}. WhatsApp: ${waErr}.` });
+  back(to, { ok: `${err ? `E-mail NOT sent (${err})` : "E-mail sent"}. ${waSay(waErr)}` });
 });
 
 // ---------- Expenses: for a cargo (shipment) or the small everyday ones ----------
@@ -317,7 +318,7 @@ export const notifyOrderEmail = act("notifyOrderEmail", async (id: string) => {
   if (!o) return;
   const to = `/orders/${o.id}`;
   if (!o.items.length) back(to, { err: "Add at least one item before e-mailing the order." });
-  const err = await emailOrder(o), waErr = await waNowOrder(db.customers.find((x) => x.no === o.cust), o.id, money(orderTotal(o)), money(Math.max(0, orderBalance(o))));
-  if (err && waErr) back(to, { err: `Nothing was sent. E-mail: ${err}. WhatsApp: ${waErr}.` });
-  back(to, { ok: `${err ? `E-mail NOT sent (${err})` : "E-mail sent"}. ${waErr ? `WhatsApp NOT sent (${waErr}).` : "WhatsApp sent."}` });
+  const err = await emailOrder(o), waErr = await waNowOrder(db.customers.find((x) => x.no === o.cust), o.id, money(orderTotal(o)), money(Math.max(0, orderBalance(o))), async () => ({ name: `Order-${o.id}.pdf`, bytes: await orderPdf(o) }));
+  if (err && waFailed(waErr)) back(to, { err: `Nothing was sent. E-mail: ${err}. WhatsApp: ${waErr}.` });
+  back(to, { ok: `${err ? `E-mail NOT sent (${err})` : "E-mail sent"}. ${waSay(waErr)}` });
 });
