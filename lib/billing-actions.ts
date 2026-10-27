@@ -1,9 +1,10 @@
 "use server";
 import { redirect } from "next/navigation";
-import { db, nowStr, charges, balance, money, wrCode, r2, findCustomer, newCustomer, repOf, timeNow, creditOf, custOf, newOrderId, orderBalance, ORDER_FEE_PCT, ORDER_STATUSES, type Order, type OrderStatus, remember as rememberName, billBalance, debtBalance, type Debt, type Expense , priced } from "./wh-store";
+import { db, nowStr, charges, balance, money, wrCode, r2, findCustomer, newCustomer, repOf, timeNow, creditOf, custOf, newOrderId, orderBalance, orderTotal, ORDER_FEE_PCT, ORDER_STATUSES, type Order, type OrderStatus, remember as rememberName, billBalance, debtBalance, type Debt, type Expense , priced } from "./wh-store";
 import { act } from "./act";
 import { requireUser } from "./users";
 import { queueMail, emailInvoice, emailOrder } from "./auto-mail";
+import { waNowInvoice, waNowOrder } from "./whatsapp";
 import { usToIso, isoToUs } from "./clock";
 
 // The billing app's actions: invoices, payments, credit and purchase orders. Every one goes through act(): loaded, signed in, logged, saved.
@@ -253,9 +254,10 @@ export const notifyInvoiceEmail = act("notifyInvoiceEmail", async (wr: string) =
   const w = db.wrs.find((x) => x.id === wr);
   if (!w?.invoice) return;
   const to = `/invoices/${encodeURIComponent(w.invoice)}`;
-  const err = await emailInvoice(w, true);
-  if (err) back(to, { err: `Not sent: ${err}` });
-  back(to, { ok: "Invoice e-mailed to the customer." });
+  // ONE button: the e-mail (PDF) and the WhatsApp message go together.
+  const err = await emailInvoice(w, true), waErr = await waNowInvoice(w, balance(w));
+  if (err && waErr) back(to, { err: `Nothing was sent. E-mail: ${err}. WhatsApp: ${waErr}.` });
+  back(to, { ok: `${err ? `E-mail NOT sent (${err})` : "E-mail sent"}. ${waErr ? `WhatsApp NOT sent (${waErr}).` : "WhatsApp sent."}` });
 });
 
 // ---------- Expenses: for a cargo (shipment) or the small everyday ones ----------
@@ -315,7 +317,7 @@ export const notifyOrderEmail = act("notifyOrderEmail", async (id: string) => {
   if (!o) return;
   const to = `/orders/${o.id}`;
   if (!o.items.length) back(to, { err: "Add at least one item before e-mailing the order." });
-  const err = await emailOrder(o);
-  if (err) back(to, { err: `Not sent: ${err}` });
-  back(to, { ok: "Order invoice e-mailed to the customer." });
+  const err = await emailOrder(o), waErr = await waNowOrder(db.customers.find((x) => x.no === o.cust), o.id, money(orderTotal(o)), money(Math.max(0, orderBalance(o))));
+  if (err && waErr) back(to, { err: `Nothing was sent. E-mail: ${err}. WhatsApp: ${waErr}.` });
+  back(to, { ok: `${err ? `E-mail NOT sent (${err})` : "E-mail sent"}. ${waErr ? `WhatsApp NOT sent (${waErr}).` : "WhatsApp sent."}` });
 });
