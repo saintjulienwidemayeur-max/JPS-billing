@@ -13,7 +13,7 @@ import { db } from "@/lib/wh-store";
 import { VERSION } from "@/lib/version";
 import { persistState, initStore, refresh } from "@/lib/persist";
 import { retryInvoiceMails } from "@/lib/auto-mail";
-import { syncSiteInvoicesSoon } from "@/lib/site-invoices";
+import { syncSiteReceiptsSoon } from "@/lib/site-receipts";
 
 export const metadata: Metadata = {
   title: "JP's Billing", applicationName: "JP's Billing",
@@ -28,7 +28,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   if (wasDown) await initStore(); // retry if the database was down at start
   await refresh(); // what the other app (billing) saved
   const ps = persistState();
-  if (ps.loaded) { retryInvoiceMails(); syncSiteInvoicesSoon(); }
+  if (ps.loaded) { retryInvoiceMails(); syncSiteReceiptsSoon(); }
   const reconnected = wasDown && ps.loaded; // this page was drawn from an empty copy: reload it
   const path = (await headers()).get("x-pathname") ?? "/";
   const open = path === "/login" || path.startsWith("/pay/"); // the login page and the pay pages (the customer's link) need no sign-in

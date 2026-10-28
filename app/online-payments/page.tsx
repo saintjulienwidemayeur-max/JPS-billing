@@ -37,11 +37,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
               <td className={`${td} whitespace-nowrap`}>{p.date}{p.time && <span className="block text-xs text-zinc-500">{p.time}</span>}</td>
               <td className={td}><Link href={`/customers/${w.cust}`} className="text-brand underline">{custOf(w)?.name ?? w.customer}</Link><span className="block text-xs text-zinc-500">#{w.cust}</span></td>
               <td className={td}>{p.payer || "–"}{p.payerEmail && <span className="block text-xs text-zinc-500">{p.payerEmail}</span>}</td>
-              <td className={td}><Link href={`/invoices/${encodeURIComponent(w.invoice ?? "")}`} className="text-brand underline">{w.invoice}</Link></td>
+              <td className={td}>{w.invoice ? <Link href={`/invoices/${encodeURIComponent(w.invoice)}`} className="text-brand underline">{w.invoice}</Link> : "–"}</td>
               <td className={td}>{wrCode(w)}</td><td className={td}>{p.method}</td>
               <td className={`${td} text-right font-semibold`}>{money(p.amount)}</td>
               <td className={`${td} font-mono text-xs`}>{p.ref.startsWith("stripe:pi_") ? <a href={`https://dashboard.stripe.com/payments/${p.ref.slice(7)}`} target="_blank" rel="noreferrer" className="text-brand underline">{p.ref.slice(7)}</a> : p.ref}</td>
-              <td className={td}><a href={`/pay/${payToken(w.invoice ?? "")}/receipt/${i}`} target="_blank" className="text-brand underline">Receipt PDF</a></td>
+              <td className={td}><a href={`/pay/${payToken(w.id)}/receipt/${i}`} target="_blank" className="text-brand underline">Receipt PDF</a></td>
             </tr>))}</tbody>
         </table></div>
       )}

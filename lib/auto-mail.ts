@@ -8,11 +8,12 @@ import { invoicePdf, orderPdf } from "./pdf";
 import { waInvoice } from "./whatsapp";
 import { PAY } from "./company";
 import { payUrl } from "./paylink";
+import { queueSiteReceipts } from "./site-receipts";
 
 const g = globalThis as unknown as { __mailQ?: Promise<void> };
 // One job at a time, after the request that asked for it has answered.
 export function queueMail(job: () => Promise<unknown>) {
-  g.__mailQ = (g.__mailQ ?? Promise.resolve()).then(async () => { try { await job(); } catch (e) { console.error("[auto-mail]", e instanceof Error ? e.message : e); } finally { await flush().catch(() => {}); } });
+  g.__mailQ = (g.__mailQ ?? Promise.resolve()).then(async () => { try { await job(); } catch (e) { console.error("[auto-mail]", e instanceof Error ? e.message : e); } finally { await flush().catch(() => {}); queueSiteReceipts(); } });
 }
 type Lang = "fr" | "en" | "es";
 const usd = (n: number, lang: Lang) => (lang === "en" ? `${n.toFixed(2)} USD` : `${n.toFixed(2).replace(".", ",")} USD`);
@@ -89,7 +90,7 @@ const log = (subject: string, to: string, error?: string) => {
 // `force` (the "Notify by e-mail" button) sends again even if it was already sent. Returns an error text, or "".
 export async function emailInvoice(w: WR, force = false): Promise<string> {
   if (!w.invoice || (w.invoiceSent && !force)) return "";
-  if (!force) waInvoice(w, balance(w), async () => ({ name: `Invoice-${w.invoice}.pdf`, bytes: await invoicePdf(w) }), payUrl(w.invoice)); // WhatsApp (short text), even when there is no usable e-mail
+  if (!force) waInvoice(w, balance(w), async () => ({ name: `Invoice-${w.invoice}.pdf`, bytes: await invoicePdf(w) }), payUrl(w)); // WhatsApp (short text), even when there is no usable e-mail
   const tries = (w.invoiceMail?.tries ?? 0) + 1;
   const fail = (e: string, again: boolean) => { w.invoiceMail = { error: e, tries: again ? tries : 99, at: `${nowStr()} ${timeNow()}` }; };
   const c = custOf(w), lang = (c?.lang === "en" || c?.lang === "es" ? c.lang : "fr") as Lang, tx = T[lang];
@@ -99,7 +100,7 @@ export async function emailInvoice(w: WR, force = false): Promise<string> {
   if (!email) { const e = "no usable e-mail (missing, shared or company address)"; log(subject, c?.name ?? w.customer, e); fail(e, false); return e; }
   const pdf = await invoicePdf(w), name = `Invoice-${w.invoice}.pdf`;
   // With a pay link, the line about card fees is replaced by the link and the e-mail gets a "Pay online" button.
-  const link = balance(w) > 0.004 ? payUrl(w.invoice) : "";
+  const link = balance(w) > 0.004 ? payUrl(w) : "";
   let message = tx.body(c?.name ?? w.customer, w.invoice, "", total(w), Math.max(0, balance(w)), paidAmt(w));
   if (link) { const cut = ONLINE[lang]; message = message.includes(cut.old) ? message.replace(cut.old, cut.line(link)) : `${message}\n\n${cut.line(link)}`; }
   const error = await mailTo({ email, name: c?.name ?? w.customer, lang }, subject, message, [{ name, content: Buffer.from(pdf).toString("base64") }], link ? { label: ONLINE[lang].button, url: link } : undefined);

@@ -257,7 +257,7 @@ export const notifyInvoiceEmail = act("notifyInvoiceEmail", async (wr: string) =
   if (!w?.invoice) return;
   const to = `/invoices/${encodeURIComponent(w.invoice)}`;
   // ONE button: the e-mail (PDF) and the WhatsApp message go together.
-  const err = await emailInvoice(w, true), waErr = await waNowInvoice(w, balance(w), async () => ({ name: `Invoice-${w.invoice}.pdf`, bytes: await invoicePdf(w) }), payUrl(w.invoice));
+  const err = await emailInvoice(w, true), waErr = await waNowInvoice(w, balance(w), async () => ({ name: `Invoice-${w.invoice}.pdf`, bytes: await invoicePdf(w) }), payUrl(w));
   if (err && waFailed(waErr)) back(to, { err: `Nothing was sent. E-mail: ${err}. WhatsApp: ${waErr}.` });
   back(to, { ok: `${err ? `E-mail NOT sent (${err})` : "E-mail sent"}. ${waSay(waErr)}` });
 });
