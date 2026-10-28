@@ -4,7 +4,7 @@
 import { ensureLoaded, refresh } from "@/lib/persist";
 import { total, paidAmt, balance, money, wrCode, custOf } from "@/lib/wh-store";
 import { wrOfToken, docUrl, receiptUrl, payToken, siteBase } from "@/lib/paylink";
-import { stripeReady, stripeStatus } from "@/lib/stripe";
+import { stripeReady, stripeStatus, publishableKey } from "@/lib/stripe";
 import { openCheckout } from "@/lib/pay-checkout";
 import { settleSession } from "@/lib/online-pay";
 
@@ -13,7 +13,7 @@ const json = (b: unknown, status = 200) => Response.json(b, { status, headers: {
 
 export async function POST(req: Request, { params }: { params: Promise<{ action: string }> }) {
   const { action } = await params;
-  const body = (await req.json().catch(() => ({}))) as { t?: string; session_id?: string };
+  const body = (await req.json().catch(() => ({}))) as { t?: string; session_id?: string; embedded?: boolean };
   await ensureLoaded(); await refresh();
   const w = body.t ? wrOfToken(String(body.t)) : undefined;
   if (!w) return json({ error: "link" }, 404);
@@ -22,14 +22,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ action:
     const c = custOf(w), bal = Math.max(0, balance(w)), paid = paidAmt(w);
     return json({
       name: w.customer, lang: c?.lang ?? "fr", wr: wrCode(w), invoice: w.invoice ?? null, total: total(w), paid, balance: bal, status: paid <= 0 ? "unpaid" : bal <= 0.004 ? "paid" : "partial",
-      canPay: stripeReady() && bal > 0.004, stripe: stripeStatus(), wrPdf: docUrl(w, "wr"), invoicePdf: w.invoice ? docUrl(w, "invoice") : "",
+      canPay: stripeReady() && bal > 0.004, stripe: stripeStatus(), publishableKey: publishableKey(), wrPdf: docUrl(w, "wr"), invoicePdf: w.invoice ? docUrl(w, "invoice") : "",
       payments: w.payments.map((p, i) => ({ date: p.date, method: p.method, amount: p.amount, receipt: receiptUrl(w, i) })), money: money(bal),
     });
   }
   if (action === "checkout") {
     if (!site) return json({ error: "off" }, 503);
-    const r = await openCheckout(w, { success: `${site}/pay.html?t=${tok}&session_id={CHECKOUT_SESSION_ID}`, cancel: `${site}/pay.html?t=${tok}&canceled=1` });
-    return "error" in r ? json({ error: r.error }, 400) : json({ url: (r as { url: string }).url });
+    const embedded = !!publishableKey(); // the payment form opens inside the website page when the publishable key is set
+    const r = await openCheckout(w, { success: `${site}/pay.html?t=${tok}&session_id={CHECKOUT_SESSION_ID}`, cancel: `${site}/pay.html?t=${tok}&canceled=1` }, embedded);
+    return "error" in r ? json({ error: r.error }, 400) : "clientSecret" in r ? json({ clientSecret: r.clientSecret, publishableKey: publishableKey() }) : json({ url: r.url });
   }
   if (action === "confirm") {
     const id = String(body.session_id ?? "");

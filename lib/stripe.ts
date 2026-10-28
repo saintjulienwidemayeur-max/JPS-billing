@@ -8,6 +8,8 @@ const key = () => (process.env.STRIPE_SECRET_KEY ?? "").trim().replace(/^STRIPE_
 const api = () => (process.env.STRIPE_API_BASE ?? "https://api.stripe.com/v1").replace(/\/$/, "");
 export const stripeReady = () => /^(sk|rk)_(test|live)_[A-Za-z0-9]+$/.test(key());
 // For the pay page's technical code: "ok", "missing" (not set in THIS app) or "invalid" (set, but not a secret key: sk_test_… / sk_live_…).
+// The publishable key (pk_test_… / pk_live_…) is public: the website's pay page needs it to show the embedded payment form.
+export const publishableKey = () => { const k = (process.env.STRIPE_PUBLISHABLE_KEY ?? "").trim().replace(/^["']|["']$/g, "").trim(); return /^pk_(test|live)_[A-Za-z0-9]+$/.test(k) ? k : ""; };
 export const stripeStatus = () => (stripeReady() ? "ok" : !key() ? "missing" : key().startsWith("pk_") ? "is-the-publishable-key" : key().startsWith("whsec_") ? "is-the-webhook-secret" : /\s|•/.test(key()) ? "has-spaces-or-hidden-characters" : "invalid");
 
 type Form = [string, string][];
@@ -26,15 +28,17 @@ async function call<T>(method: "GET" | "POST", path: string, form: Form = [], id
 }
 
 export type Session = {
-  id: string; url?: string; payment_status?: string; status?: string; amount_total?: number; currency?: string; client_reference_id?: string | null;
+  id: string; url?: string; client_secret?: string; payment_status?: string; status?: string; amount_total?: number; currency?: string; client_reference_id?: string | null;
   metadata?: Record<string, string>; customer_details?: { name?: string | null; email?: string | null } | null;
   payment_intent?: string | { id: string; latest_charge?: string | { payment_method_details?: { type?: string; card?: { brand?: string; last4?: string; wallet?: { type?: string } | null } } } | null } | null;
 };
 
 // One Checkout Session for the balance of one invoice. The amount is in cents. Not given `payment_method_types`, Checkout shows every method turned on in the Stripe Dashboard.
-export async function createCheckout(a: { invoice: string; wr: string; cust: number; cents: number; name: string; email?: string; lang: string; successUrl: string; cancelUrl: string }) {
+export async function createCheckout(a: { invoice: string; wr: string; cust: number; cents: number; name: string; email?: string; lang: string; successUrl: string; cancelUrl?: string; embedded?: boolean }) {
   const f: Form = [
-    ["mode", "payment"], ["success_url", a.successUrl], ["cancel_url", a.cancelUrl], ["client_reference_id", a.invoice || a.wr],
+    ["mode", "payment"], ["client_reference_id", a.invoice || a.wr],
+    // Embedded: the payment form opens inside the website's page (Stripe's iframe) and Stripe sends the customer to return_url afterwards; else the customer goes to Stripe's own page.
+    ...((a.embedded ? [["ui_mode", "embedded"], ["return_url", a.successUrl]] : [["success_url", a.successUrl], ["cancel_url", a.cancelUrl ?? a.successUrl]]) as Form),
     ["line_items[0][quantity]", "1"], ["line_items[0][price_data][currency]", "usd"], ["line_items[0][price_data][unit_amount]", String(a.cents)],
     ["line_items[0][price_data][product_data][name]", a.name], ["line_items[0][price_data][product_data][description]", `JP's Logistics & More - receipt ${a.wr}`],
     ["metadata[invoice]", a.invoice], ["metadata[wr]", a.wr], ["metadata[cust]", String(a.cust)],
@@ -45,7 +49,7 @@ export async function createCheckout(a: { invoice: string; wr: string; cust: num
   // Stripe refuses (or ignores) a parameter sent empty: a receipt with no invoice has no invoice number.
   const clean = f.filter(([, v]) => v !== "");
   // The same invoice and balance within a few minutes gives the same session: a double click does not open two payment pages.
-  const idem = `${a.invoice || a.wr}-${a.cents}-${Math.floor(Date.now() / 600_000)}`;
+  const idem = `${a.embedded ? "e-" : ""}${a.invoice || a.wr}-${a.cents}-${Math.floor(Date.now() / 600_000)}`;
   return call<Session>("POST", "/checkout/sessions", clean, idem);
 }
 export const getSession = (id: string) => call<Session>("GET", `/checkout/sessions/${encodeURIComponent(id)}`, [["expand[]", "payment_intent.latest_charge"]]);
