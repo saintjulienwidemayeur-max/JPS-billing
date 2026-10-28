@@ -155,7 +155,7 @@ export async function invoicePdf(w: WR): Promise<Uint8Array> {
   for (const [k, v, b] of [["Total", money(total(w)), true], ["Paid", money(paidAmt(w))], ["Balance", money(balance(w)), true]] as [string, string, boolean?][]) { d.need(16); d.text(k, d.W - M - 190, 10.5, { bold: !!b }); d.text(v, 0, 10.5, { bold: !!b, right: d.W - M }); d.y -= 16; }
   if (w.payments.length) { d.y -= 6; d.para("Payments received", M, CW, 9.5, { bold: true, gap: 1 }); for (const p of w.payments) d.row([{ w: CW - 90, t: `${p.date} - ${p.method}${p.ref ? ` - ${p.ref}` : ""}` }, { w: 90, t: money(p.amount), right: true }], 8.5); }
   if (balance(w) > 0 && payUrl(w)) {
-    d.y -= 8; d.para(`Pay this invoice online (bank card, Apple Pay, Google Pay, Link): ${payUrl(w)}`, M, CW, 9.5, { bold: true });
+    d.y -= 8; d.para(`Pay this invoice online (bank card, Apple Pay, Google Pay, Cash App, Link): ${payUrl(w)}`, M, CW, 9.5, { bold: true });
   } else if (balance(w) > 0) {
     const card = cardFees(balance(w)); d.y -= 8;
     d.para(`If paying the balance (${money(balance(w))}) by credit card: Square CC invoice ${money(card.invoice.total)} (fee ${money(card.invoice.fee)}) - card present ${money(card.present.total)} (fee ${money(card.present.fee)}) - manual ${money(card.manual.total)} (fee ${money(card.manual.fee)})`, M, CW, 8.5, { color: GREY });

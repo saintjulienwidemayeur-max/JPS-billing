@@ -62,7 +62,8 @@ export function methodOf(s: Session): string {
   const d = ch?.payment_method_details;
   if (!d?.type) return "Online (Stripe)";
   if (d.type === "card") { const w = d.card?.wallet?.type; const brand = (d.card?.brand ?? "card").replace(/^\w/, (c) => c.toUpperCase()); return `Online: ${w ? w.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) + " " : ""}${brand} ${d.card?.last4 ?? ""}`.trim().slice(0, 30); }
-  return `Online: ${d.type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}`.slice(0, 30);
+  const NAMES: Record<string, string> = { cashapp: "Cash App", link: "Link", us_bank_account: "Bank (ACH)", klarna: "Klarna", affirm: "Affirm", amazon_pay: "Amazon Pay" };
+  return `Online: ${NAMES[d.type] ?? d.type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}`.slice(0, 30);
 }
 export const intentOf = (s: Session) => (typeof s.payment_intent === "string" ? s.payment_intent : s.payment_intent?.id ?? s.id);
 

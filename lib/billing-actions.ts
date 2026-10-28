@@ -252,14 +252,52 @@ export const deleteBill = act("deleteBill", async (id: string) => {
 });
 
 // "Notify by e-mail" button: the invoice (PDF) goes to the customer now, even if it was already sent.
-export const notifyInvoiceEmail = act("notifyInvoiceEmail", async (wr: string) => {
+// "Notify": the e-mail (PDF) and the WhatsApp message together. `channel` sends only one of them (the "send again" buttons).
+type NResult = { mailErr: string | null; waErr: string | null }; // null = not tried, "" = sent
+async function sendInvoice(w: (typeof db.wrs)[number], channel: string): Promise<NResult> {
+  const r: NResult = { mailErr: null, waErr: null };
+  if (channel !== "wa") r.mailErr = await emailInvoice(w, true);
+  if (channel !== "email") r.waErr = await waNowInvoice(w, balance(w), async () => ({ name: `Invoice-${w.invoice}.pdf`, bytes: await invoicePdf(w) }), payUrl(w));
+  return r;
+}
+async function sendOrder(o: Order, channel: string): Promise<NResult> {
+  const r: NResult = { mailErr: null, waErr: null };
+  if (channel !== "wa") r.mailErr = await emailOrder(o);
+  if (channel !== "email") r.waErr = await waNowOrder(db.customers.find((x) => x.no === o.cust), o.id, money(orderTotal(o)), money(Math.max(0, orderBalance(o))), async () => ({ name: `Order-${o.id}.pdf`, bytes: await orderPdf(o) }));
+  return r;
+}
+// The page message and the "not sent" ids that the "Send again" bar reads (nm = e-mail, nw = WhatsApp).
+function result(to: string, kind: string, id: string, r: NResult): never {
+  const mFail = !!r.mailErr, wFail = r.waErr !== null && waFailed(r.waErr);
+  const left = { ...(mFail && { nm: id }), ...(wFail && { nw: id }), ...((mFail || wFail) && { nkind: kind }) };
+  const parts = [r.mailErr !== null && (r.mailErr ? `E-mail NOT sent (${r.mailErr})` : "E-mail sent"), r.waErr !== null && waSay(r.waErr)].filter(Boolean).join(". ");
+  const tried = [r.mailErr !== null, r.waErr !== null].filter(Boolean).length;
+  return back(to, { [tried && (mFail ? 1 : 0) + (wFail ? 1 : 0) === tried ? "err" : "ok"]: tried && (mFail ? 1 : 0) + (wFail ? 1 : 0) === tried ? `Nothing was sent. ${parts.replace(/\.$/, "")}.` : `${parts.replace(/\.$/, "")}.`, ...left });
+}
+export const notifyInvoiceEmail = act("notifyInvoiceEmail", async (wr: string, channel?: string) => {
   const w = db.wrs.find((x) => x.id === wr);
   if (!w?.invoice) return;
-  const to = `/invoices/${encodeURIComponent(w.invoice)}`;
-  // ONE button: the e-mail (PDF) and the WhatsApp message go together.
-  const err = await emailInvoice(w, true), waErr = await waNowInvoice(w, balance(w), async () => ({ name: `Invoice-${w.invoice}.pdf`, bytes: await invoicePdf(w) }), payUrl(w));
-  if (err && waFailed(waErr)) back(to, { err: `Nothing was sent. E-mail: ${err}. WhatsApp: ${waErr}.` });
-  back(to, { ok: `${err ? `E-mail NOT sent (${err})` : "E-mail sent"}. ${waSay(waErr)}` });
+  result(`/invoices/${encodeURIComponent(w.invoice)}`, "invoice", w.id, await sendInvoice(w, channel ?? "both"));
+});
+export const notifyOrderEmail = act("notifyOrderEmail", async (id: string, channel?: string) => {
+  const o = db.orders.find((x) => x.id === id);
+  if (!o) return;
+  const to = `/orders/${o.id}`;
+  if (!o.items.length) back(to, { err: "Add at least one item before e-mailing the order." });
+  result(to, "order", o.id, await sendOrder(o, channel ?? "both"));
+});
+// Tells again, one channel only, those whose e-mail or WhatsApp message did not go.
+export const notifyRetry = act("notifyRetry", async (kind: string, channel: string, ids: string, ret: string) => {
+  const list = ids.split(",").filter(Boolean).slice(0, 100), nm: string[] = [], nw: string[] = [];
+  let sent = 0;
+  for (const id of list) {
+    const r = kind === "order" ? (db.orders.find((x) => x.id === id) ? await sendOrder(db.orders.find((x) => x.id === id)!, channel) : null) : (db.wrs.find((x) => x.id === id)?.invoice ? await sendInvoice(db.wrs.find((x) => x.id === id)!, channel) : null);
+    if (!r) continue;
+    if (r.mailErr) nm.push(id); else if (r.mailErr === "") sent++;
+    if (r.waErr !== null && waFailed(r.waErr)) nw.push(id); else if (r.waErr !== null) sent++;
+  }
+  const left = { ...(nm.length && { nm: nm.join(",") }), ...(nw.length && { nw: nw.join(",") }), ...((nm.length || nw.length) && { nkind: kind }) };
+  back(ret || "/", { [nm.length || nw.length ? "err" : "ok"]: `${sent} ${channel === "email" ? "e-mail" : "WhatsApp"} message(s) sent${nm.length || nw.length ? `, ${nm.length + nw.length} still not sent` : ""}.`, ...left });
 });
 
 // ---------- Expenses: for a cargo (shipment) or the small everyday ones ----------
@@ -314,12 +352,3 @@ export const deleteDebt = act("deleteDebt", async (id: string) => {
 });
 
 // "Notify by e-mail" on an order: the order's invoice (PDF) goes to the customer now.
-export const notifyOrderEmail = act("notifyOrderEmail", async (id: string) => {
-  const o = db.orders.find((x) => x.id === id);
-  if (!o) return;
-  const to = `/orders/${o.id}`;
-  if (!o.items.length) back(to, { err: "Add at least one item before e-mailing the order." });
-  const err = await emailOrder(o), waErr = await waNowOrder(db.customers.find((x) => x.no === o.cust), o.id, money(orderTotal(o)), money(Math.max(0, orderBalance(o))), async () => ({ name: `Order-${o.id}.pdf`, bytes: await orderPdf(o) }));
-  if (err && waFailed(waErr)) back(to, { err: `Nothing was sent. E-mail: ${err}. WhatsApp: ${waErr}.` });
-  back(to, { ok: `${err ? `E-mail NOT sent (${err})` : "E-mail sent"}. ${waSay(waErr)}` });
-});

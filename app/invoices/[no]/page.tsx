@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { NotifyForm } from "@/components/notify";
 import { cancelInvoice, voidPayment, notifyInvoiceEmail } from "@/lib/billing-actions";
 import { listDocs } from "@/lib/persist";
 import { ConfirmSubmit } from "@/components/confirm-submit";
@@ -35,7 +36,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
       <div className="no-print mt-3 flex flex-wrap items-center gap-2">
         <a href={`/invoices/${encodeURIComponent(w.invoice ?? "")}/pdf`} target="_blank" className="inline-flex h-9 items-center rounded-md border border-zinc-300 bg-white px-3 font-medium">Download PDF</a>
         <a href={`/payments?inv=${w.invoice}`} className="inline-flex h-9 items-center rounded-md border border-zinc-300 bg-white px-3 font-medium">Enter payment</a>
-        <form><button formAction={notifyInvoiceEmail.bind(null, w.id)} className="inline-flex h-9 items-center rounded-md border border-brand bg-brand px-3 font-medium text-white"title="Sends the e-mail (PDF attached) and the WhatsApp message to the customer">Notify</button></form>
+        <NotifyForm action={notifyInvoiceEmail.bind(null, w.id, "both")} className="inline-flex h-9 items-center rounded-md border border-brand bg-brand px-3 font-medium text-white" title="Sends the e-mail (PDF attached) and the WhatsApp message to the customer" />
         <form className="ml-auto"><ConfirmSubmit plain formAction={cancelInvoice.bind(null, w.id)} message={`Cancel invoice ${w.invoice}? The receipt goes back to "waiting for an invoice".`}>Cancel invoice</ConfirmSubmit></form>
       </div>
       <section className="no-print mt-3 rounded-lg border bg-white p-3 text-xs">

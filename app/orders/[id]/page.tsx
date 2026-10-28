@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { db, ORDER_STATUSES, orderLine, orderSubtotal, orderFee, orderTotal, orderPaid, orderBalance, orderNotes, money } from "@/lib/wh-store";
+import { NotifyForm } from "@/components/notify";
 import { saveOrder, addOrderItem, saveOrderItems, deleteOrderItem, addOrderPayment, voidOrderPayment, notifyOrderEmail } from "@/lib/billing-actions";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { Input } from "@/components/ui/input";
@@ -25,7 +26,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
         <div className="flex flex-wrap gap-2">
           <Link href={`/orders/${o.id}/invoice`} className="inline-flex h-9 items-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium">View invoice</Link>
           <a href={`/orders/${o.id}/pdf`} target="_blank" className="inline-flex h-9 items-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium">Download PDF</a>
-          <form><button formAction={notifyOrderEmail.bind(null, o.id)} className="inline-flex h-9 items-center rounded-md bg-brand px-4 text-sm font-medium text-white"title="Sends the e-mail (PDF attached) and the WhatsApp message to the customer">Notify</button></form>
+          <NotifyForm action={notifyOrderEmail.bind(null, o.id, "both")} className="inline-flex h-9 items-center rounded-md bg-brand px-4 text-sm font-medium text-white" title="Sends the e-mail (PDF attached) and the WhatsApp message to the customer" />
         </div>
       </div>
       {q.err && <p role="alert" className="mt-2 text-sm font-medium text-red-700">{q.err}</p>}
