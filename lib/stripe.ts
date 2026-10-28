@@ -3,9 +3,12 @@
 // STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET are read from the environment: they are never stored in the code or the database.
 import crypto from "node:crypto";
 
-const key = () => (process.env.STRIPE_SECRET_KEY ?? "").trim();
+// Quotes or a "STRIPE_SECRET_KEY=" typed by mistake in the Render value are ignored.
+const key = () => (process.env.STRIPE_SECRET_KEY ?? "").trim().replace(/^STRIPE_SECRET_KEY\s*=\s*/, "").replace(/^["']|["']$/g, "").trim();
 const api = () => (process.env.STRIPE_API_BASE ?? "https://api.stripe.com/v1").replace(/\/$/, "");
-export const stripeReady = () => /^(sk|rk)_/.test(key());
+export const stripeReady = () => /^(sk|rk)_(test|live)_[A-Za-z0-9]+$/.test(key());
+// For the pay page's technical code: "ok", "missing" (not set in THIS app) or "invalid" (set, but not a secret key: sk_test_… / sk_live_…).
+export const stripeStatus = () => (stripeReady() ? "ok" : key() ? "invalid" : "missing");
 
 type Form = [string, string][];
 async function call<T>(method: "GET" | "POST", path: string, form: Form = [], idem?: string): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
