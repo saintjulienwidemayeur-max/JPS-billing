@@ -8,7 +8,7 @@ const key = () => (process.env.STRIPE_SECRET_KEY ?? "").trim().replace(/^STRIPE_
 const api = () => (process.env.STRIPE_API_BASE ?? "https://api.stripe.com/v1").replace(/\/$/, "");
 export const stripeReady = () => /^(sk|rk)_(test|live)_[A-Za-z0-9]+$/.test(key());
 // For the pay page's technical code: "ok", "missing" (not set in THIS app) or "invalid" (set, but not a secret key: sk_test_… / sk_live_…).
-export const stripeStatus = () => (stripeReady() ? "ok" : key() ? "invalid" : "missing");
+export const stripeStatus = () => (stripeReady() ? "ok" : !key() ? "missing" : key().startsWith("pk_") ? "is-the-publishable-key" : key().startsWith("whsec_") ? "is-the-webhook-secret" : /\s|•/.test(key()) ? "has-spaces-or-hidden-characters" : "invalid");
 
 type Form = [string, string][];
 async function call<T>(method: "GET" | "POST", path: string, form: Form = [], idem?: string): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
