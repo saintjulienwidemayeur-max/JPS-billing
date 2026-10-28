@@ -6,7 +6,7 @@ import { mailEnabled, mailTo } from "./mail";
 import { usableEmail } from "./mailrules";
 import { invoicePdf, orderPdf } from "./pdf";
 import { waInvoice } from "./whatsapp";
-import { PAY } from "./company";
+import { PAY, payOther } from "./company";
 import { payUrl } from "./paylink";
 import { queueSiteReceipts } from "./site-receipts";
 
@@ -70,11 +70,11 @@ const signoff = (lang: Lang) => ({
 }[lang]);
 const thanks = (lang: Lang) => ({ fr: "Merci d'avoir pensé à JP'S LOGISTICS & MORE pour vos besoins en logistique et en expédition.", en: "Thank you for thinking of JP'S LOGISTICS & MORE for your logistics and shipping needs.", es: "Gracias por pensar en JP'S LOGISTICS & MORE para sus necesidades de logística y envío." }[lang]);
 const T = {
-  fr: { subject: (n: string) => `Votre facture ${n}`, body: (name: string, n: string, r: string, t: number, b: number, paid: number) => `Bonjour ${name},\n\n${thanks("fr")}\nVous trouverez ci-joint votre facture de ${usd(t, "fr")}, correspondant au coût des biens et/ou services fournis.${paid > 0 ? ` Déjà payé : ${usd(paid, "fr")}. Solde à payer : ${usd(b, "fr")}.` : ""} ${payBlock("fr")}\n${signoff("fr")}`,
+  fr: { subject: (n: string) => `Votre facture ${n}`, body: (name: string, n: string, r: string, t: number, b: number, paid: number) => `Merci d'avoir pensé à JP'S LOGISTICS & MORE ! Votre facture **${n}** de **${usd(t, "fr")}** est jointe (PDF).${paid > 0 ? `\n\n• Déjà payé : ${usd(paid, "fr")}\n• Solde à payer : **${usd(b, "fr")}**` : ""}\n\n${payOther("fr")}`,
     oSubject: (n: string) => `Votre commande ${n} : facture`, oBody: (name: string, n: string, t: number, b: number, paid: number) => `Bonjour ${name},\n\n${thanks("fr")}\nVous trouverez ci-joint la facture de votre commande n° ${n} de ${usd(t, "fr")}, correspondant au coût des articles achetés et des frais.${paid > 0 ? ` Déjà payé : ${usd(paid, "fr")}.` : ""}${b > 0 ? ` Solde à payer : ${usd(b, "fr")}. ${payBlock("fr")}` : " Votre commande est payée en totalité. Merci !"}\n${signoff("fr")}` },
-  en: { subject: (n: string) => `Your invoice ${n}`, body: (name: string, n: string, r: string, t: number, b: number, paid: number) => `Dear ${name},\n\n${thanks("en")}\nPlease find attached your invoice for ${usd(t, "en")}, covering the cost of the goods and/or services provided.${paid > 0 ? ` Already paid: ${usd(paid, "en")}. Balance to pay: ${usd(b, "en")}.` : ""} ${payBlock("en")}\n${signoff("en")}`,
+  en: { subject: (n: string) => `Your invoice ${n}`, body: (name: string, n: string, r: string, t: number, b: number, paid: number) => `Thank you for thinking of JP'S LOGISTICS & MORE! Your invoice **${n}** for **${usd(t, "en")}** is attached (PDF).${paid > 0 ? `\n\n• Already paid: ${usd(paid, "en")}\n• Balance to pay: **${usd(b, "en")}**` : ""}\n\n${payOther("en")}`,
     oSubject: (n: string) => `Your order ${n}: invoice`, oBody: (name: string, n: string, t: number, b: number, paid: number) => `Dear ${name},\n\n${thanks("en")}\nPlease find attached the invoice for your order no. ${n} of ${usd(t, "en")}, covering the cost of the items purchased and the fees.${paid > 0 ? ` Already paid: ${usd(paid, "en")}.` : ""}${b > 0 ? ` Balance to pay: ${usd(b, "en")}. ${payBlock("en")}` : " Your order is paid in full. Thank you!"}\n${signoff("en")}` },
-  es: { subject: (n: string) => `Su factura ${n}`, body: (name: string, n: string, r: string, t: number, b: number, paid: number) => `Estimado/a ${name},\n\n${thanks("es")}\nEncontrará adjunta su factura por ${usd(t, "es")}, correspondiente al costo de los bienes y/o servicios prestados.${paid > 0 ? ` Ya pagado: ${usd(paid, "es")}. Saldo a pagar: ${usd(b, "es")}.` : ""} ${payBlock("es")}\n${signoff("es")}`,
+  es: { subject: (n: string) => `Su factura ${n}`, body: (name: string, n: string, r: string, t: number, b: number, paid: number) => `¡Gracias por pensar en JP'S LOGISTICS & MORE! Su factura **${n}** por **${usd(t, "es")}** va adjunta (PDF).${paid > 0 ? `\n\n• Ya pagado: ${usd(paid, "es")}\n• Saldo a pagar: **${usd(b, "es")}**` : ""}\n\n${payOther("es")}`,
     oSubject: (n: string) => `Su pedido ${n}: factura`, oBody: (name: string, n: string, t: number, b: number, paid: number) => `Estimado/a ${name},\n\n${thanks("es")}\nEncontrará adjunta la factura de su pedido n.º ${n} por ${usd(t, "es")}, correspondiente al costo de los artículos comprados y los cargos.${paid > 0 ? ` Ya pagado: ${usd(paid, "es")}.` : ""}${b > 0 ? ` Saldo a pagar: ${usd(b, "es")}. ${payBlock("es")}` : " Su pedido está pagado en su totalidad. ¡Gracias!"}\n${signoff("es")}` },
 };
 const ONLINE: Record<Lang, { old: string; line: (u: string) => string; button: string }> = {
@@ -99,11 +99,10 @@ export async function emailInvoice(w: WR, force = false): Promise<string> {
   if (!mailEnabled()) { const e = "E-mail is not set up (SUPABASE_URL, SITE_STAFF_EMAIL, SITE_STAFF_PASSWORD)."; log(subject, c?.name ?? w.customer, e); fail(e, false); return e; }
   if (!email) { const e = "no usable e-mail (missing, shared or company address)"; log(subject, c?.name ?? w.customer, e); fail(e, false); return e; }
   const pdf = await invoicePdf(w), name = `Invoice-${w.invoice}.pdf`;
-  // With a pay link, the line about card fees is replaced by the link and the e-mail gets a "Pay online" button.
+  // With a pay link the e-mail gets a "Pay online" button under the text.
   const link = balance(w) > 0.004 ? payUrl(w) : "";
   let message = tx.body(c?.name ?? w.customer, w.invoice, "", total(w), Math.max(0, balance(w)), paidAmt(w));
-  if (link) { const cut = ONLINE[lang]; message = message.includes(cut.old) ? message.replace(cut.old, cut.line(link)) : `${message}\n\n${cut.line(link)}`; }
-  const error = await mailTo({ email, name: c?.name ?? w.customer, lang }, subject, message, [{ name, content: Buffer.from(pdf).toString("base64") }], link ? { label: ONLINE[lang].button, url: link } : undefined);
+  const error = await mailTo({ email, name: c?.name ?? w.customer, lang }, subject, message, [{ name, content: Buffer.from(pdf).toString("base64") }], link ? { label: ONLINE[lang].button, url: link, methods: true } : undefined);
   log(subject, email, error ?? undefined);
   if (error) { fail(error, true); return error; }
   await saveDoc({ kind: "invoice", ref: w.invoice, name, note: `sent to ${email}`, data: pdf });

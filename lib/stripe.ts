@@ -31,7 +31,7 @@ export type Session = {
 // One Checkout Session for the balance of one invoice. The amount is in cents. Not given `payment_method_types`, Checkout shows every method turned on in the Stripe Dashboard.
 export async function createCheckout(a: { invoice: string; wr: string; cust: number; cents: number; name: string; email?: string; lang: string; successUrl: string; cancelUrl: string }) {
   const f: Form = [
-    ["mode", "payment"], ["success_url", a.successUrl], ["cancel_url", a.cancelUrl], ["client_reference_id", a.invoice],
+    ["mode", "payment"], ["success_url", a.successUrl], ["cancel_url", a.cancelUrl], ["client_reference_id", a.invoice || a.wr],
     ["line_items[0][quantity]", "1"], ["line_items[0][price_data][currency]", "usd"], ["line_items[0][price_data][unit_amount]", String(a.cents)],
     ["line_items[0][price_data][product_data][name]", a.name], ["line_items[0][price_data][product_data][description]", `JP's Logistics & More - receipt ${a.wr}`],
     ["metadata[invoice]", a.invoice], ["metadata[wr]", a.wr], ["metadata[cust]", String(a.cust)],
@@ -39,9 +39,11 @@ export async function createCheckout(a: { invoice: string; wr: string; cust: num
     ["locale", ["fr", "en", "es"].includes(a.lang) ? a.lang : "auto"],
   ];
   if (a.email) f.push(["customer_email", a.email]);
+  // Stripe refuses (or ignores) a parameter sent empty: a receipt with no invoice has no invoice number.
+  const clean = f.filter(([, v]) => v !== "");
   // The same invoice and balance within a few minutes gives the same session: a double click does not open two payment pages.
-  const idem = `${a.invoice}-${a.cents}-${Math.floor(Date.now() / 600_000)}`;
-  return call<Session>("POST", "/checkout/sessions", f, idem);
+  const idem = `${a.invoice || a.wr}-${a.cents}-${Math.floor(Date.now() / 600_000)}`;
+  return call<Session>("POST", "/checkout/sessions", clean, idem);
 }
 export const getSession = (id: string) => call<Session>("GET", `/checkout/sessions/${encodeURIComponent(id)}`, [["expand[]", "payment_intent.latest_charge"]]);
 

@@ -15,6 +15,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   const all = db.wrs.flatMap((w) => w.payments.map((p, i) => ({ w, p, i }))).filter((x) => x.p.online);
   const rows = all.filter(({ w, p }) => (!month || usToIso(p.date).startsWith(month)) && (!needle || `${w.customer} ${w.cust} ${w.invoice} ${p.payer ?? ""} ${p.payerEmail ?? ""} ${p.method} ${p.ref}`.toLowerCase().includes(needle)))
     .sort((a, b) => `${usToIso(b.p.date)} ${b.p.time ?? ""}`.localeCompare(`${usToIso(a.p.date)} ${a.p.time ?? ""}`));
+  const problem = db.audit.find((x) => x.action === "checkout failed");
   const sum = r2(rows.reduce((a, x) => a + x.p.amount, 0));
   const months = [...new Set(all.map((x) => usToIso(x.p.date).slice(0, 7)))].sort().reverse();
   return (
@@ -22,6 +23,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
       <h1>Online payments</h1>
       <p className="text-sm text-zinc-600">Payments the customers made by themselves from the link in the invoice e-mail, the WhatsApp message or their space on the website (Stripe: cards, Apple Pay, Google Pay, Link...). Each one is already recorded on its invoice, and the customer got the receipt.</p>
       {!stripeReady() && <p role="alert" className="mt-2 rounded-md bg-amber-50 p-3 text-sm font-medium text-amber-900">Online payment is not turned on: add STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET in Render (this app), and PAY_BASE_URL if the address below is empty. Public address used in the links: <b>{payBase() || "(not known yet)"}</b></p>}
+      {problem && <p role="alert" className="mt-2 rounded-md bg-red-50 p-3 text-sm text-red-800"><b>Last problem opening Stripe</b> ({problem.date} {problem.time}, {problem.detail}): {problem.result}</p>}
       <form className="mt-4 flex flex-wrap items-center gap-2">
         <Input name="q" placeholder="Search customer, invoice, payer, reference" defaultValue={q.q} className="max-w-72" aria-label="Search" />
         <select name="month" defaultValue={month} aria-label="Month" className="h-9 rounded-md border bg-white px-2 text-sm"><option value="">All months</option>{months.map((m) => <option key={m}>{m}</option>)}</select>
