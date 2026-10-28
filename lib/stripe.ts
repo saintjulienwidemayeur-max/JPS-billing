@@ -18,7 +18,8 @@ async function call<T>(method: "GET" | "POST", path: string, form: Form = [], id
   try {
     const body = new URLSearchParams(form);
     const r = await fetch(`${api()}${path}${method === "GET" && form.length ? `?${body}` : ""}`, {
-      method, headers: { authorization: `Bearer ${key()}`, ...(method === "POST" && { "content-type": "application/x-www-form-urlencoded" }), ...(idem && { "idempotency-key": idem }) },
+      method, headers: { authorization: `Bearer ${key()}`, "stripe-version": process.env.STRIPE_API_VERSION || "2024-06-20", // pinned: newer accounts default to a version that renamed ui_mode "embedded"
+       ...(method === "POST" && { "content-type": "application/x-www-form-urlencoded" }), ...(idem && { "idempotency-key": idem }) },
       ...(method === "POST" && { body }), signal: AbortSignal.timeout(20_000),
     });
     const j = (await r.json().catch(() => ({}))) as { error?: { message?: string } } & Record<string, unknown>;
