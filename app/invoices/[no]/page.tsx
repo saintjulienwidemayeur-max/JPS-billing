@@ -6,6 +6,8 @@ import { db, docLines, custOf, repOf, wrCode, total, paidAmt, balance, payStatus
 import { cardFees } from "@/lib/pricing";
 import { shortDate } from "@/lib/fmt";
 import { PrintButton } from "@/components/print-button";
+import { payUrl, payToken } from "@/lib/paylink";
+import { stripeReady } from "@/lib/stripe";
 
 const th = "px-2 py-1 font-semibold", td = "px-2 py-1";
 
@@ -36,6 +38,11 @@ export default async function Page({ params, searchParams }: { params: Promise<{
         <form><button formAction={notifyInvoiceEmail.bind(null, w.id)} className="inline-flex h-9 items-center rounded-md border border-brand bg-brand px-3 font-medium text-white"title="Sends the e-mail (PDF attached) and the WhatsApp message to the customer">Notify</button></form>
         <form className="ml-auto"><ConfirmSubmit plain formAction={cancelInvoice.bind(null, w.id)} message={`Cancel invoice ${w.invoice}? The receipt goes back to "waiting for an invoice".`}>Cancel invoice</ConfirmSubmit></form>
       </div>
+      <section className="no-print mt-3 rounded-lg border bg-white p-3 text-xs">
+        <b>Online payment link</b> · {stripeReady() ? "on" : "not turned on (STRIPE_SECRET_KEY)"}: <a href={`/pay/${payToken(w.invoice ?? "")}`} target="_blank" className="text-brand underline">open the customer&apos;s pay page</a>
+        {payUrl(w.invoice) ? <span className="mt-1 block break-all font-mono text-zinc-600">{payUrl(w.invoice)}</span> : <span className="mt-1 block text-amber-800">The public address of this app is not known: set PAY_BASE_URL in Render so the link can be put in the e-mails.</span>}
+        {w.payments.some((x) => x.online) && <span className="mt-1 block text-green-700">Paid online: {w.payments.filter((x) => x.online).map((x) => `${x.date} ${money(x.amount)} (${x.method})`).join(" · ")}</span>}
+      </section>
       <p className={`no-print mt-2 text-xs ${w.invoiceSent ? "text-green-700" : w.invoiceMail?.error ? "text-amber-800" : "text-zinc-500"}`}>
         {w.invoiceSent ? `E-mailed to the customer by itself on ${w.invoiceSent} (PDF attached).` : w.invoiceMail?.error ? `Not e-mailed: ${w.invoiceMail.error}${w.invoiceMail.tries < 4 ? " It will be tried again by itself." : ""}` : "The invoice is e-mailed to the customer by itself a few seconds after it is made."}
       </p>

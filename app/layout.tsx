@@ -13,6 +13,7 @@ import { db } from "@/lib/wh-store";
 import { VERSION } from "@/lib/version";
 import { persistState, initStore, refresh } from "@/lib/persist";
 import { retryInvoiceMails } from "@/lib/auto-mail";
+import { syncSiteInvoicesSoon } from "@/lib/site-invoices";
 
 export const metadata: Metadata = {
   title: "JP's Billing", applicationName: "JP's Billing",
@@ -27,11 +28,12 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   if (wasDown) await initStore(); // retry if the database was down at start
   await refresh(); // what the other app (billing) saved
   const ps = persistState();
-  if (ps.loaded) retryInvoiceMails();
+  if (ps.loaded) { retryInvoiceMails(); syncSiteInvoicesSoon(); }
   const reconnected = wasDown && ps.loaded; // this page was drawn from an empty copy: reload it
   const path = (await headers()).get("x-pathname") ?? "/";
-  const user = path === "/login" ? null : await currentUser();
-  if (path !== "/login" && !user) redirect("/login"); // cookie of someone removed or changed, or a restart
+  const open = path === "/login" || path.startsWith("/pay/"); // the login page and the pay pages (the customer's link) need no sign-in
+  const user = open ? null : await currentUser();
+  if (!open && !user) redirect("/login"); // cookie of someone removed or changed, or a restart
   const mode = !ps.enabled ? "memory" : ps.loaded ? "database" : "down";
   return (
     <html lang="en">

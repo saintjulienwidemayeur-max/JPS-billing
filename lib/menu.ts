@@ -1,7 +1,7 @@
 // The billing app's menu: sections like the old billing software (customers, receivables, reports, payables). The sidebar, the main menu, each
 // section's page and the breadcrumb all read this list, so a page is added in one place.
 import { allowed, isOn, type Claims } from "./access";
-import { Home, Users, FileText, FilePlus2, Banknote, Archive, ShoppingCart, Wallet, CalendarDays, ScrollText, Receipt, FileUp, Landmark, Coins, Ship, Warehouse, type LucideIcon } from "lucide-react";
+import { Home, Users, FileText, FilePlus2, Banknote, Archive, ShoppingCart, Wallet, CreditCard, CalendarDays, ScrollText, Receipt, FileUp, Landmark, Coins, Ship, Warehouse, type LucideIcon } from "lucide-react";
 
 export type MenuPage = { href: string; label: string; icon: LucideIcon; desc: string; adminOnly?: boolean };
 export type MenuSection = { slug: string; title: string; icon: LucideIcon; blurb: string; pages: MenuPage[] };
@@ -21,6 +21,7 @@ export const SECTIONS: MenuSection[] = [
       { href: "/receivables", label: "Receivables", icon: Wallet, desc: "What is owed, how old it is, and who owes" },
       { href: "/invoices", label: "Manage invoices", icon: FileText, desc: "Every invoice: filter, print, follow up" },
       { href: "/invoices/new", label: "Invoice", icon: FilePlus2, desc: "Make the invoice of a warehouse receipt" },
+      { href: "/online-payments", label: "Online payments", icon: CreditCard, desc: "Every payment made online by card or wallet: when, who paid, which invoice" },
       { href: "/payments", label: "Enter payments", icon: Banknote, desc: "Receive a payment from a customer, or pay one invoice" },
       { href: "/oldinvoices", label: "Old invoices", icon: Archive, desc: "The invoices of the old billing system: history and what is still owed" },
       { href: "/orders", label: "Orders", icon: ShoppingCart, desc: "Purchase orders JP's buys for customers" },

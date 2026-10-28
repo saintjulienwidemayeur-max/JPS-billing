@@ -6,6 +6,7 @@ import { requireUser } from "./users";
 import { queueMail, emailInvoice, emailOrder } from "./auto-mail";
 import { waNowInvoice, waNowOrder, waFailed, waSay } from "./whatsapp";
 import { invoicePdf, orderPdf } from "./pdf";
+import { payUrl } from "./paylink";
 import { usToIso, isoToUs } from "./clock";
 
 // The billing app's actions: invoices, payments, credit and purchase orders. Every one goes through act(): loaded, signed in, logged, saved.
@@ -256,7 +257,7 @@ export const notifyInvoiceEmail = act("notifyInvoiceEmail", async (wr: string) =
   if (!w?.invoice) return;
   const to = `/invoices/${encodeURIComponent(w.invoice)}`;
   // ONE button: the e-mail (PDF) and the WhatsApp message go together.
-  const err = await emailInvoice(w, true), waErr = await waNowInvoice(w, balance(w), async () => ({ name: `Invoice-${w.invoice}.pdf`, bytes: await invoicePdf(w) }));
+  const err = await emailInvoice(w, true), waErr = await waNowInvoice(w, balance(w), async () => ({ name: `Invoice-${w.invoice}.pdf`, bytes: await invoicePdf(w) }), payUrl(w.invoice));
   if (err && waFailed(waErr)) back(to, { err: `Nothing was sent. E-mail: ${err}. WhatsApp: ${waErr}.` });
   back(to, { ok: `${err ? `E-mail NOT sent (${err})` : "E-mail sent"}. ${waSay(waErr)}` });
 });

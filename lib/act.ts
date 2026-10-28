@@ -5,6 +5,7 @@ import { requireUser } from "./users";
 import { logAudit, summarize } from "./audit";
 import { BILLING_ACCESS } from "./access";
 import { redirect } from "next/navigation";
+import { queueSiteInvoices } from "./site-invoices";
 
 const decode = (s: string) => { try { return decodeURIComponent(s.replace(/\+/g, " ")); } catch { return s; } };
 const words = (n: string) => n.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
@@ -27,6 +28,6 @@ export const act = <A extends unknown[]>(name: string, fn: (...a: A) => Promise<
       if (typeof digest === "string" && digest.startsWith("NEXT_REDIRECT")) { const m = digest.match(/[?&]err=([^&;]*)/); result = m ? `refused: ${decode(m[1])}` : "ok"; }
       else result = `error: ${e instanceof Error ? e.message : String(e)}`;
       throw e;
-    } finally { logAudit(user.name, words(name), summarize(a), result); await flush(); }
+    } finally { logAudit(user.name, words(name), summarize(a), result); await flush(); queueSiteInvoices(); }
   } finally { unlock(); }
 };

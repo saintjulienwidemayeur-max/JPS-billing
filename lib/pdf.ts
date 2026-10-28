@@ -6,6 +6,7 @@ import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFP
 import { DISCLAIMER, ESTIMATE_NOTE } from "./disclaimer";
 import { COMPANY, HAITI } from "./company";
 import { cardFees } from "./pricing";
+import { payUrl } from "./paylink";
 import { db, vol, cuft, chargeable, r2, charges, credits, quote, insuranceFee, total, paidAmt, balance, payStatus, money, wrCode, docLines, custOf, shipperOf, receiverOf, toUSA, freightFee, freightQty, freightDesc, contentsOf, repOf, orderLine, orderSubtotal, orderFee, orderTotal, orderPaid, orderBalance, orderNotes, type WR, type Order } from "./wh-store";
 
 const MAP: Record<string, string> = { "−": "-", "–": "-", "—": "-", "·": "-", "•": "*", "‘": "'", "’": "'", "“": '"', "”": '"', "…": "...", "→": "->", "×": "x", "≥": ">=", "€": "EUR", " ": " " };
@@ -153,11 +154,33 @@ export async function invoicePdf(w: WR): Promise<Uint8Array> {
   d.y -= 8;
   for (const [k, v, b] of [["Total", money(total(w)), true], ["Paid", money(paidAmt(w))], ["Balance", money(balance(w)), true]] as [string, string, boolean?][]) { d.need(16); d.text(k, d.W - M - 190, 10.5, { bold: !!b }); d.text(v, 0, 10.5, { bold: !!b, right: d.W - M }); d.y -= 16; }
   if (w.payments.length) { d.y -= 6; d.para("Payments received", M, CW, 9.5, { bold: true, gap: 1 }); for (const p of w.payments) d.row([{ w: CW - 90, t: `${p.date} - ${p.method}${p.ref ? ` - ${p.ref}` : ""}` }, { w: 90, t: money(p.amount), right: true }], 8.5); }
-  if (balance(w) > 0) {
+  if (balance(w) > 0 && payUrl(w.invoice)) {
+    d.y -= 8; d.para(`Pay this invoice online (bank card, Apple Pay, Google Pay, Link): ${payUrl(w.invoice)}`, M, CW, 9.5, { bold: true });
+  } else if (balance(w) > 0) {
     const card = cardFees(balance(w)); d.y -= 8;
     d.para(`If paying the balance (${money(balance(w))}) by credit card: Square CC invoice ${money(card.invoice.total)} (fee ${money(card.invoice.fee)}) - card present ${money(card.present.total)} (fee ${money(card.present.fee)}) - manual ${money(card.manual.total)} (fee ${money(card.manual.fee)})`, M, CW, 8.5, { color: GREY });
   }
   d.y -= 8; d.para("Thank you for your business. Questions? Write to us or call " + COMPANY.phone + ".", M, CW, 9, { color: GREY });
+  return d.bytes();
+}
+
+// ---------- Payment receipt (one payment on an invoice) ----------
+export async function paymentReceiptPdf(w: WR, i: number): Promise<Uint8Array> {
+  const d = await Doc.make(), M = d.M, CW = d.W - 2 * M, p = w.payments[i], c = custOf(w);
+  const before = r2(w.payments.slice(0, i).reduce((a, x) => a + x.amount, 0)), after = r2(total(w) - before - p.amount);
+  d.header([COMPANY.name, `${COMPANY.address}, ${COMPANY.city}`, COMPANY.phone]);
+  d.text("Payment receipt", 0, 20, { bold: true, color: BLUE, right: d.W - M }); d.y -= 30;
+  const meta: [string, string][] = [["Date", `${p.date}${p.time ? " " + p.time : ""}`], ["Receipt no.", p.batch ?? `${w.invoice ?? w.id}-${i + 1}`], ["Invoice", w.invoice ?? "-"], ["Warehouse receipt", wrCode(w)], ["Method", p.method], ["Reference", p.ref ? p.ref.replace(/^stripe:/, "") : "-"]];
+  meta.forEach(([k, v], n) => { const x = M + (CW / 3) * (n % 3), yy = d.y - Math.floor(n / 3) * 28; d.page.drawText(safe(k), { x, y: yy - 8, size: 8, font: d.font, color: GREY }); d.page.drawText(safe(v), { x, y: yy - 21, size: 10, font: d.bold, color: BLACK }); });
+  d.y -= 66;
+  d.text("Received from", M, 8.5, { color: GREY }); d.y -= 11; d.text(p.payer || w.customer, M, 10.5, { bold: true }); d.y -= 14;
+  for (const l of [c?.billing, p.payerEmail || w.email].filter(Boolean) as string[]) d.para(l, M, 300, 9.5);
+  d.y -= 10;
+  d.row([{ w: CW - 120, t: "Description" }, { w: 120, t: "Amount", right: true }], 9, { head: true });
+  d.row([{ w: CW - 120, t: `Payment on invoice ${w.invoice ?? ""} (${wrCode(w)})` }, { w: 120, t: money(p.amount), right: true, bold: true }]);
+  d.y -= 8;
+  for (const [k, v, b] of [["Invoice total", money(total(w)), false], ["Paid before", money(before), false], ["This payment", money(p.amount), true], [after > 0.004 ? "Balance still due" : "Balance", after > 0.004 ? money(after) : "$0.00 - PAID IN FULL", true]] as [string, string, boolean][]) { d.need(16); d.text(k, d.W - M - 230, 10.5, { bold: b }); d.text(v, 0, 10.5, { bold: b, right: d.W - M }); d.y -= 16; }
+  d.y -= 8; d.para("Thank you for your payment. Keep this receipt for your records. Questions? Write to us or call " + COMPANY.phone + ".", M, CW, 9, { color: GREY });
   return d.bytes();
 }
 

@@ -7,7 +7,7 @@ import { locate } from "@/lib/menu";
 // Where you are: Main menu > Section > Page. Also the way around on a narrow screen, where the sidebar is hidden.
 export function Crumbs() {
   const path = usePathname();
-  if (path === "/login" || path === "/") return null;
+  if (path === "/login" || path === "/" || path.startsWith("/pay/")) return null;
   const { section, page } = locate(path);
   const Sep = () => <ChevronRight size={14} aria-hidden className="text-zinc-400" />;
   return (

@@ -201,3 +201,25 @@ export async function siteAccountStats(): Promise<{ login: Map<string, string>; 
   }
   return out;
 }
+
+// ---------- Invoices and payments shown in the customer's space on the website (SQL section 17 of the website's schema) ----------
+export type SiteInvoiceRow = { client_id: string; invoice_no: string; receipt_code: string; issued: string; total: number; paid: number; balance: number; status: "unpaid" | "partial" | "paid"; pay_url: string };
+export type SitePaymentRow = { paid_on: string; amount: number; method: string; reference: string; receipt_url: string };
+// Writes (or rewrites) one invoice and its payments. Returns an error text, or null.
+export async function pushSiteInvoice(inv: SiteInvoiceRow, payments: SitePaymentRow[]): Promise<string | null> {
+  const c = client();
+  if (!c) return null;
+  const u = await c.from("client_invoices").upsert({ ...inv, updated_at: new Date().toISOString() }, { onConflict: "invoice_no" });
+  if (u.error) return u.error.message;
+  const d = await c.from("client_payments").delete().eq("invoice_no", inv.invoice_no);
+  if (d.error) return d.error.message;
+  if (payments.length) { const i = await c.from("client_payments").insert(payments.map((p) => ({ ...p, client_id: inv.client_id, invoice_no: inv.invoice_no }))); if (i.error) return i.error.message; }
+  return null;
+}
+export async function dropSiteInvoice(invoiceNo: string): Promise<string | null> {
+  const c = client();
+  if (!c) return null;
+  const a = await c.from("client_payments").delete().eq("invoice_no", invoiceNo);
+  const b = await c.from("client_invoices").delete().eq("invoice_no", invoiceNo);
+  return a.error?.message ?? b.error?.message ?? null;
+}

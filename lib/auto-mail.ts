@@ -7,6 +7,7 @@ import { usableEmail } from "./mailrules";
 import { invoicePdf, orderPdf } from "./pdf";
 import { waInvoice } from "./whatsapp";
 import { PAY } from "./company";
+import { payUrl } from "./paylink";
 
 const g = globalThis as unknown as { __mailQ?: Promise<void> };
 // One job at a time, after the request that asked for it has answered.
@@ -75,6 +76,11 @@ const T = {
   es: { subject: (n: string) => `Su factura ${n}`, body: (name: string, n: string, r: string, t: number, b: number, paid: number) => `Estimado/a ${name},\n\n${thanks("es")}\nEncontrará adjunta su factura por ${usd(t, "es")}, correspondiente al costo de los bienes y/o servicios prestados.${paid > 0 ? ` Ya pagado: ${usd(paid, "es")}. Saldo a pagar: ${usd(b, "es")}.` : ""} ${payBlock("es")}\n${signoff("es")}`,
     oSubject: (n: string) => `Su pedido ${n}: factura`, oBody: (name: string, n: string, t: number, b: number, paid: number) => `Estimado/a ${name},\n\n${thanks("es")}\nEncontrará adjunta la factura de su pedido n.º ${n} por ${usd(t, "es")}, correspondiente al costo de los artículos comprados y los cargos.${paid > 0 ? ` Ya pagado: ${usd(paid, "es")}.` : ""}${b > 0 ? ` Saldo a pagar: ${usd(b, "es")}. ${payBlock("es")}` : " Su pedido está pagado en su totalidad. ¡Gracias!"}\n${signoff("es")}` },
 };
+const ONLINE: Record<Lang, { old: string; line: (u: string) => string; button: string }> = {
+  fr: { old: "- Pour les frais de traitement des paiements par carte de crédit, veuillez demander une facture en ligne.", line: (u) => `- Payer en ligne par carte bancaire, Apple Pay, Google Pay ou Link : ${u}`, button: "Payer en ligne" },
+  en: { old: "- For credit card processing fees, please ask for an online invoice.", line: (u) => `- Pay online by bank card, Apple Pay, Google Pay or Link: ${u}`, button: "Pay online" },
+  es: { old: "- Para los cargos de procesamiento de pagos con tarjeta de crédito, solicite una factura en línea.", line: (u) => `- Pagar en línea con tarjeta bancaria, Apple Pay, Google Pay o Link: ${u}`, button: "Pagar en línea" },
+};
 const log = (subject: string, to: string, error?: string) => {
   db.maillog.unshift({ id: db.n.mail++, date: nowStr(), time: timeNow(), by: "automatic", subject, to, sent: error ? 0 : 1, total: 1, failed: error ? [error] : [] });
   db.maillog.length = Math.min(db.maillog.length, 200);
@@ -83,7 +89,7 @@ const log = (subject: string, to: string, error?: string) => {
 // `force` (the "Notify by e-mail" button) sends again even if it was already sent. Returns an error text, or "".
 export async function emailInvoice(w: WR, force = false): Promise<string> {
   if (!w.invoice || (w.invoiceSent && !force)) return "";
-  if (!force) waInvoice(w, balance(w), async () => ({ name: `Invoice-${w.invoice}.pdf`, bytes: await invoicePdf(w) })); // WhatsApp (short text), even when there is no usable e-mail
+  if (!force) waInvoice(w, balance(w), async () => ({ name: `Invoice-${w.invoice}.pdf`, bytes: await invoicePdf(w) }), payUrl(w.invoice)); // WhatsApp (short text), even when there is no usable e-mail
   const tries = (w.invoiceMail?.tries ?? 0) + 1;
   const fail = (e: string, again: boolean) => { w.invoiceMail = { error: e, tries: again ? tries : 99, at: `${nowStr()} ${timeNow()}` }; };
   const c = custOf(w), lang = (c?.lang === "en" || c?.lang === "es" ? c.lang : "fr") as Lang, tx = T[lang];
@@ -92,7 +98,11 @@ export async function emailInvoice(w: WR, force = false): Promise<string> {
   if (!mailEnabled()) { const e = "E-mail is not set up (SUPABASE_URL, SITE_STAFF_EMAIL, SITE_STAFF_PASSWORD)."; log(subject, c?.name ?? w.customer, e); fail(e, false); return e; }
   if (!email) { const e = "no usable e-mail (missing, shared or company address)"; log(subject, c?.name ?? w.customer, e); fail(e, false); return e; }
   const pdf = await invoicePdf(w), name = `Invoice-${w.invoice}.pdf`;
-  const error = await mailTo({ email, name: c?.name ?? w.customer, lang }, subject, tx.body(c?.name ?? w.customer, w.invoice, "", total(w), Math.max(0, balance(w)), paidAmt(w)), [{ name, content: Buffer.from(pdf).toString("base64") }]);
+  // With a pay link, the line about card fees is replaced by the link and the e-mail gets a "Pay online" button.
+  const link = balance(w) > 0.004 ? payUrl(w.invoice) : "";
+  let message = tx.body(c?.name ?? w.customer, w.invoice, "", total(w), Math.max(0, balance(w)), paidAmt(w));
+  if (link) { const cut = ONLINE[lang]; message = message.includes(cut.old) ? message.replace(cut.old, cut.line(link)) : `${message}\n\n${cut.line(link)}`; }
+  const error = await mailTo({ email, name: c?.name ?? w.customer, lang }, subject, message, [{ name, content: Buffer.from(pdf).toString("base64") }], link ? { label: ONLINE[lang].button, url: link } : undefined);
   log(subject, email, error ?? undefined);
   if (error) { fail(error, true); return error; }
   await saveDoc({ kind: "invoice", ref: w.invoice, name, note: `sent to ${email}`, data: pdf });
