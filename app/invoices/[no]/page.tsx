@@ -39,7 +39,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
         <form className="ml-auto"><ConfirmSubmit plain formAction={cancelInvoice.bind(null, w.id)} message={`Cancel invoice ${w.invoice}? The receipt goes back to "waiting for an invoice".`}>Cancel invoice</ConfirmSubmit></form>
       </div>
       <section className="no-print mt-3 rounded-lg border bg-white p-3 text-xs">
-        <b>Online payment link</b> · {stripeReady() ? "on" : "not turned on (STRIPE_SECRET_KEY)"}: <a href={`/pay/${payToken(w.id)}`} target="_blank" className="text-brand underline">open the customer&apos;s pay page</a>
+        <b>Online payment link</b> · {stripeReady() ? "on" : "not turned on (STRIPE_SECRET_KEY)"}: <a href={`/pay/${payToken(w)}`} target="_blank" className="text-brand underline">open the customer&apos;s pay page</a>
         {payUrl(w) ? <span className="mt-1 block break-all font-mono text-zinc-600">{payUrl(w)}</span> : <span className="mt-1 block text-amber-800">The public address of this app is not known: set PAY_BASE_URL in Render so the link can be put in the e-mails.</span>}
         {w.payments.some((x) => x.online) && <span className="mt-1 block text-green-700">Paid online: {w.payments.filter((x) => x.online).map((x) => `${x.date} ${money(x.amount)} (${x.method})`).join(" · ")}</span>}
       </section>

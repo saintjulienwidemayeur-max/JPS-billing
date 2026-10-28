@@ -3,7 +3,7 @@
 // The signed token in every call is the key.
 import { ensureLoaded, refresh } from "@/lib/persist";
 import { total, paidAmt, balance, money, wrCode, custOf } from "@/lib/wh-store";
-import { wrOfToken, docUrl, receiptUrl, payToken } from "@/lib/paylink";
+import { wrOfToken, docUrl, receiptUrl, payToken, siteBase } from "@/lib/paylink";
 import { stripeReady } from "@/lib/stripe";
 import { openCheckout } from "@/lib/pay-checkout";
 import { settleSession } from "@/lib/online-pay";
@@ -17,7 +17,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ action:
   await ensureLoaded(); await refresh();
   const w = body.t ? wrOfToken(String(body.t)) : undefined;
   if (!w) return json({ error: "link" }, 404);
-  const site = (process.env.PAY_SITE_URL ?? "").replace(/\/$/, ""), tok = payToken(w.id);
+  const site = siteBase(), tok = payToken(w);
   if (action === "info") {
     const c = custOf(w), bal = Math.max(0, balance(w)), paid = paidAmt(w);
     return json({

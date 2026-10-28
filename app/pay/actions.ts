@@ -12,7 +12,7 @@ export async function startCheckout(token: string) {
   const w = wrOfToken(token);
   if (!w) redirect(`${here}?err=link`);
   const h = await headers();
-  const origin = payBase(`${h.get("x-forwarded-proto") ?? "https"}://${h.get("x-forwarded-host") ?? h.get("host") ?? ""}`), tok = payToken(w!.id);
+  const origin = payBase(`${h.get("x-forwarded-proto") ?? "https"}://${h.get("x-forwarded-host") ?? h.get("host") ?? ""}`), tok = payToken(w!);
   const r = await openCheckout(w!, { success: `${origin}/pay/${tok}/done?session_id={CHECKOUT_SESSION_ID}`, cancel: `${origin}/pay/${tok}?canceled=1` });
   if ("error" in r) redirect(`${here}?err=${r.error}`);
   redirect((r as { url: string }).url);

@@ -43,7 +43,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
               <td className={td}>{wrCode(w)}</td><td className={td}>{p.method}</td>
               <td className={`${td} text-right font-semibold`}>{money(p.amount)}</td>
               <td className={`${td} font-mono text-xs`}>{p.ref.startsWith("stripe:pi_") ? <a href={`https://dashboard.stripe.com/payments/${p.ref.slice(7)}`} target="_blank" rel="noreferrer" className="text-brand underline">{p.ref.slice(7)}</a> : p.ref}</td>
-              <td className={td}><a href={`/pay/${payToken(w.id)}/receipt/${i}`} target="_blank" className="text-brand underline">Receipt PDF</a></td>
+              <td className={td}><a href={`/pay/${payToken(w)}/receipt/${i}`} target="_blank" className="text-brand underline">Receipt PDF</a></td>
             </tr>))}</tbody>
         </table></div>
       )}
