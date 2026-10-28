@@ -7,7 +7,7 @@ export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
   const headers = new Headers(req.headers);
   headers.set("x-pathname", path);
-  if (path === "/login" || path.startsWith("/pay/") || path.startsWith("/api/stripe/")) return NextResponse.next({ request: { headers } });
+  if (path === "/login" || path.startsWith("/pay/") || path.startsWith("/api/stripe/") || path.startsWith("/api/pay/")) return NextResponse.next({ request: { headers } });
   const me = await readSession(req.cookies.get(SESSION_COOKIE)?.value);
   const url = req.nextUrl.clone();
   if (!me) { url.pathname = "/login"; url.search = ""; return NextResponse.redirect(url); }
