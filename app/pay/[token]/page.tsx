@@ -6,6 +6,7 @@ import { stripeReady } from "@/lib/stripe";
 import { startCheckout } from "../actions";
 import { PT, langOf } from "@/lib/pay-text";
 import { Button } from "@/components/ui/button";
+import { cardFee } from "@/lib/pricing";
 
 export const metadata = { title: "Pay your invoice · JP's Logistics & More", robots: { index: false, follow: false } };
 
@@ -31,6 +32,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
           <dt>{t.total}</dt><dd className="text-right">{money(total(w))}</dd>
           <dt>{t.paid}</dt><dd className="text-right">{money(paid)}</dd>
           <dt className="font-bold">{t.balance}</dt><dd className="text-right text-lg font-bold">{money(bal)}</dd>
+          {bal > 0.004 && stripeReady() && <><dt className="text-zinc-600">{t.fee}</dt><dd className="text-right text-zinc-600">+ {money(cardFee(bal))}</dd></>}
           <dt>{t.status}</dt><dd className="text-right">{status}</dd>
         </dl>
         {!w.invoice && bal > 0.004 && <p className="mt-3 text-xs text-zinc-500">{t.estimate}</p>}
@@ -38,7 +40,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
         {bal > 0.004 ? (
           stripeReady() ? (
             <form action={startCheckout.bind(null, token)} className="mt-5">
-              <Button type="submit" className="h-12 w-full text-base font-semibold">{t.pay.replace("{x}", money(bal))}</Button>
+              <Button type="submit" className="h-12 w-full text-base font-semibold">{t.pay.replace("{x}", money(bal + cardFee(bal)))}</Button>
               <p className="mt-2 text-center text-xs text-zinc-500">{t.secure}</p>
             </form>
           ) : <p className="mt-5 text-sm text-zinc-600">{t.e_off}</p>

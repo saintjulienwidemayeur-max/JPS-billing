@@ -1,7 +1,7 @@
 // An online payment (Stripe Checkout) that went through: it is recorded on the invoice (so the receipt shows "Paid in full" by itself), the customer gets
 // the payment receipt (PDF) by e-mail and in the website space, and JP's gets an e-mail saying who paid. Called by the pay page (when the customer comes
 // back) and by the Stripe webhook (if they close the page): whichever comes first records it, the other finds it already recorded.
-import { db, nowStr, timeNow, r2, balance, total, money, wrCode, custOf } from "./wh-store";
+import { db, nowStr, timeNow, r2, balance, total, money, wrCode, custOf, CARD_FEE_LABEL } from "./wh-store";
 import { ensureLoaded, refresh, lockActions, flush, saveDoc } from "./persist";
 import { logAudit } from "./audit";
 import { getSession, intentOf, methodOf, type Session } from "./stripe";
@@ -31,6 +31,9 @@ export async function settleSession(sessionId: string, source = "Stripe"): Promi
     const inv = w.invoice ?? wrCode(w);
     const dup = w.payments.findIndex((p) => p.ref === ref);
     if (dup >= 0) return (out = { ok: true, already: true, wr: w.id, invoice: inv, amount: w.payments[dup].amount, index: dup });
+    // The card fee the customer was charged (a separate line on Stripe's page) goes on the receipt, so the invoice shows it and the payment covers it.
+    const feeCents = Number(s.metadata?.fee_cents ?? 0);
+    if (feeCents > 0) w.fees.push({ id: db.n.fee++, label: CARD_FEE_LABEL, amount: r2(feeCents / 100), kind: "charge", auto: "card" });
     const amount = r2((s.amount_total ?? 0) / 100), pay = r2(Math.min(amount, Math.max(0, balance(w)))), extra = r2(amount - pay), c = custOf(w);
     const method = methodOf(s), batch = `PAY-${db.n.pay++}`, date = nowStr(), time = timeNow();
     const payer = s.customer_details?.name || w.customer, payerEmail = s.customer_details?.email || "";

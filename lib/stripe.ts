@@ -35,13 +35,15 @@ export type Session = {
 };
 
 // One Checkout Session for the balance of one invoice. The amount is in cents. Not given `payment_method_types`, Checkout shows every method turned on in the Stripe Dashboard.
-export async function createCheckout(a: { invoice: string; wr: string; cust: number; cents: number; name: string; email?: string; lang: string; successUrl: string; cancelUrl?: string; embedded?: boolean }) {
+export async function createCheckout(a: { invoice: string; wr: string; cust: number; cents: number; feeCents?: number; name: string; email?: string; lang: string; successUrl: string; cancelUrl?: string; embedded?: boolean }) {
   const f: Form = [
     ["mode", "payment"], ["client_reference_id", a.invoice || a.wr],
     // Embedded: the payment form opens inside the website's page (Stripe's iframe) and Stripe sends the customer to return_url afterwards; else the customer goes to Stripe's own page.
     ...((a.embedded ? [["ui_mode", "embedded"], ["return_url", a.successUrl]] : [["success_url", a.successUrl], ["cancel_url", a.cancelUrl ?? a.successUrl]]) as Form),
     ["line_items[0][quantity]", "1"], ["line_items[0][price_data][currency]", "usd"], ["line_items[0][price_data][unit_amount]", String(a.cents)],
     ["line_items[0][price_data][product_data][name]", a.name], ["line_items[0][price_data][product_data][description]", `JP's Logistics & More - receipt ${a.wr}`],
+    // The card fee (3% + $0.30) is its own line, so the customer sees what it is.
+    ...((a.feeCents ? [["line_items[1][quantity]", "1"], ["line_items[1][price_data][currency]", "usd"], ["line_items[1][price_data][unit_amount]", String(a.feeCents)], ["line_items[1][price_data][product_data][name]", "Card processing fee (3% + $0.30)"], ["metadata[fee_cents]", String(a.feeCents)]] : []) as Form),
     ["metadata[invoice]", a.invoice], ["metadata[wr]", a.wr], ["metadata[cust]", String(a.cust)],
     ["payment_intent_data[metadata][invoice]", a.invoice], ["payment_intent_data[description]", `Invoice ${a.invoice}`],
     ["locale", ["fr", "en", "es"].includes(a.lang) ? a.lang : "auto"],
@@ -50,7 +52,7 @@ export async function createCheckout(a: { invoice: string; wr: string; cust: num
   // Stripe refuses (or ignores) a parameter sent empty: a receipt with no invoice has no invoice number.
   const clean = f.filter(([, v]) => v !== "");
   // The same invoice and balance within a few minutes gives the same session: a double click does not open two payment pages.
-  const idem = `${a.embedded ? "e-" : ""}${a.invoice || a.wr}-${a.cents}-${Math.floor(Date.now() / 600_000)}`;
+  const idem = `${a.embedded ? "e-" : ""}${a.invoice || a.wr}-${a.cents}+${a.feeCents ?? 0}-${Math.floor(Date.now() / 600_000)}`;
   return call<Session>("POST", "/checkout/sessions", clean, idem);
 }
 export const getSession = (id: string) => call<Session>("GET", `/checkout/sessions/${encodeURIComponent(id)}`, [["expand[]", "payment_intent.latest_charge"]]);

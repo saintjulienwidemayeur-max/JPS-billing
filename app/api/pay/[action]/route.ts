@@ -7,6 +7,7 @@ import { wrOfToken, docUrl, receiptUrl, payToken, siteBase } from "@/lib/paylink
 import { stripeReady, stripeStatus, publishableKey } from "@/lib/stripe";
 import { openCheckout } from "@/lib/pay-checkout";
 import { settleSession } from "@/lib/online-pay";
+import { cardFee } from "@/lib/pricing";
 
 export const dynamic = "force-dynamic";
 const json = (b: unknown, status = 200) => Response.json(b, { status, headers: { "cache-control": "no-store" } });
@@ -22,7 +23,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ action:
     const c = custOf(w), bal = Math.max(0, balance(w)), paid = paidAmt(w);
     return json({
       name: w.customer, lang: c?.lang ?? "fr", wr: wrCode(w), invoice: w.invoice ?? null, total: total(w), paid, balance: bal, status: paid <= 0 ? "unpaid" : bal <= 0.004 ? "paid" : "partial",
-      canPay: stripeReady() && bal > 0.004, stripe: stripeStatus(), publishableKey: publishableKey(), wrPdf: docUrl(w, "wr"), invoicePdf: w.invoice ? docUrl(w, "invoice") : "",
+      fee: cardFee(bal), canPay: stripeReady() && bal > 0.004, stripe: stripeStatus(), publishableKey: publishableKey(), wrPdf: docUrl(w, "wr"), invoicePdf: w.invoice ? docUrl(w, "invoice") : "",
       payments: w.payments.map((p, i) => ({ date: p.date, method: p.method, amount: p.amount, receipt: receiptUrl(w, i) })), money: money(bal),
     });
   }

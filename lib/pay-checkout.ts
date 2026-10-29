@@ -1,6 +1,7 @@
 // Opens the Stripe Checkout page for the balance of a receipt. Used by the pay page of this app and by the API the website's pay page calls.
 import { balance, r2, wrCode, custOf, money, type WR } from "./wh-store";
 import { createCheckout, stripeReady } from "./stripe";
+import { cardFee } from "./pricing";
 import { usableEmail } from "./mailrules";
 import { logAudit } from "./audit";
 import { flush } from "./persist";
@@ -10,7 +11,7 @@ export async function openCheckout(w: WR, urls: { success: string; cancel?: stri
   if (bal <= 0) return { error: "paid" };
   if (!stripeReady()) return { error: "off" };
   const c = custOf(w);
-  const base = { invoice: w.invoice ?? "", wr: w.id, cust: w.cust, cents: Math.round(bal * 100), name: w.invoice ? `Invoice ${w.invoice} - ${w.customer}` : `Receipt ${wrCode(w)} - ${w.customer}`,
+  const base = { invoice: w.invoice ?? "", wr: w.id, cust: w.cust, cents: Math.round(bal * 100), feeCents: Math.round(cardFee(bal) * 100), name: w.invoice ? `Invoice ${w.invoice} - ${w.customer}` : `Receipt ${wrCode(w)} - ${w.customer}`,
     email: (c && usableEmail(c)) || (w.email && usableEmail({ email: w.email }) ? w.email : undefined), lang: c?.lang ?? "fr", successUrl: urls.success, cancelUrl: urls.cancel };
   // The form inside the website's page first; if Stripe refuses that, the customer still gets Stripe's own page.
   for (const emb of embedded ? [true, false] : [false]) {

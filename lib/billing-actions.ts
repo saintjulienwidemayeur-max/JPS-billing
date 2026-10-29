@@ -1,7 +1,8 @@
 "use server";
 import { redirect } from "next/navigation";
-import { db, nowStr, charges, balance, money, wrCode, r2, findCustomer, newCustomer, repOf, timeNow, creditOf, custOf, newOrderId, orderBalance, orderTotal, ORDER_FEE_PCT, ORDER_STATUSES, type Order, type OrderStatus, remember as rememberName, billBalance, debtBalance, type Debt, type Expense , priced } from "./wh-store";
+import { db, isCardMethod, addCardFee, nowStr, charges, balance, money, wrCode, r2, findCustomer, newCustomer, repOf, timeNow, creditOf, custOf, newOrderId, orderBalance, orderTotal, ORDER_FEE_PCT, ORDER_STATUSES, type Order, type OrderStatus, remember as rememberName, billBalance, debtBalance, type Debt, type Expense , priced } from "./wh-store";
 import { act } from "./act";
+import { cardFee } from "./pricing";
 import { requireUser } from "./users";
 import { queueMail, emailInvoice, emailOrder } from "./auto-mail";
 import { waNowInvoice, waNowOrder, waFailed, waSay } from "./whatsapp";
@@ -60,9 +61,11 @@ export const addPayment = act("addPayment", async (f: F) => {
   if (!method || method.length > 30) back(wrPath(w.id), { err: "Choose how the customer paid (or type a new payment method)." });
   const paid = r2(amount);
   if (twice(`wr${w.id}`, paid, method, s(f, "ref"))) back(wrPath(w.id), { err: DUP });
-  w.payments.push({ date: nowStr(), time: timeNow(), amount: paid, method, ref: s(f, "ref") });
+  // A card payment: the fee (3% + $0.30) goes on the receipt and the customer pays it with the amount.
+  const fee = isCardMethod(method) ? addCardFee(w, paid) : 0;
+  w.payments.push({ date: nowStr(), time: timeNow(), amount: r2(paid + fee), method, ref: s(f, "ref") });
   rememberName(db.payMethods, method);
-  back(wrPath(w.id), { ok: `Payment of ${money(paid)} by ${method} added. ${balance(w) > 0 ? `Balance left: ${money(balance(w))}.` : "Paid in full."}` });
+  back(wrPath(w.id), { ok: `Payment of ${money(paid + fee)} by ${method} added${fee ? ` (${money(paid)} + ${money(fee)} card fee: charge ${money(paid + fee)} on the card)` : ""}. ${balance(w) > 0 ? `Balance left: ${money(balance(w))}.` : "Paid in full."}` });
 });
 // Bound from the page: voidPayment.bind(null, receiptId, paymentIndex).
 export const voidPayment = act("voidPayment", async (wr: string, i: number) => {
@@ -98,6 +101,15 @@ export const receivePayment = act("receivePayment", async (f: F) => {
     if (take <= 0) break;
     (it.w ?? it.d!).payments.push({ date, time, amount: r2(take), method, ref, batch });
     left = r2(left - take);
+  }
+  // A card payment: the fee (3% + $0.30 of what was applied) goes on the oldest receipt (or account balance) paid, and the customer pays it too.
+  if (isCardMethod(method)) {
+    const applied = r2(amount - left), first = items.find((it) => it.w ? it.w.payments.some((p) => p.batch === batch) : it.d!.payments.some((p) => p.batch === batch));
+    if (applied > 0 && first) {
+      const fee = cardFee(applied);
+      if (first.w) addCardFee(first.w, applied); else { first.d!.amount = r2(first.d!.amount + fee); first.d!.note = `${first.d!.note} + card fee`.slice(0, 120); }
+      (first.w ?? first.d!).payments.push({ date, time, amount: fee, method, ref, batch });
+    }
   }
   if (left > 0) (c!.creditLog ??= []).push({ date, time, amount: left, note: `Paid more than owed (${method})`, batch, method, ref });
   rememberName(db.payMethods, method);
@@ -339,7 +351,10 @@ export const payDebt = act("payDebt", async (f: F) => {
   if (!method || method.length > 30) back(here, { err: "Choose how the customer paid (or type a new payment method)." });
   if (twice(`d${d.id}`, r2(amount), method, s(f, "ref"))) back(here, { err: DUP });
   const batch = `PAY-${db.n.pay++}`;
-  d.payments.push({ date: nowStr(), time: timeNow(), amount: r2(amount), method, ref: s(f, "ref"), batch });
+  // A card payment: the fee (3% + $0.30) is added to this balance and paid with it.
+  const fee = isCardMethod(method) ? cardFee(r2(amount)) : 0;
+  if (fee) { d.amount = r2(d.amount + fee); d.note = `${d.note} + card fee`.slice(0, 120); }
+  d.payments.push({ date: nowStr(), time: timeNow(), amount: r2(amount + fee), method, ref: s(f, "ref"), batch });
   rememberName(db.payMethods, method);
   back(`${PY}/${batch}`);
 });
