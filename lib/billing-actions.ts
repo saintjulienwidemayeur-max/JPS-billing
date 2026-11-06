@@ -4,11 +4,12 @@ import { db, isCardMethod, addCardFee, nowStr, charges, balance, money, wrCode, 
 import { act } from "./act";
 import { cardFee } from "./pricing";
 import { requireUser } from "./users";
+import { sendBalance } from "./balance-notify";
 import { queueMail, emailInvoice, emailOrder } from "./auto-mail";
 import { waNowInvoice, waNowOrder, waFailed, waSay } from "./whatsapp";
 import { invoicePdf, orderPdf } from "./pdf";
 import { payUrl } from "./paylink";
-import { usToIso, isoToUs } from "./clock";
+import { usToIso, isoToUs, isoToday } from "./clock";
 
 // The billing app's actions: invoices, payments, credit and purchase orders. Every one goes through act(): loaded, signed in, logged, saved.
 type F = FormData;
@@ -21,6 +22,13 @@ const back = (path: string, q: Record<string, string> = {}): never => {
 // After a payment or an invoice change: the invoice if there is one, else the customer's payment page.
 const wrPath = (id: string) => { const w = db.wrs.find((x) => x.id === id); return w?.invoice ? `/payments?inv=${w.invoice}` : `/payments?c=${w?.cust ?? ""}`; };
 
+// The date the customer paid: today (the default) or an earlier day typed in the form (a payment entered late). Never in the future.
+const payWhen = (f: F, here: string): { date: string; time?: string } => {
+  const iso = s(f, "date");
+  if (!iso || iso === isoToday()) return { date: nowStr(), time: timeNow() };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) || iso > isoToday()) back(here, { err: "The payment date cannot be in the future." });
+  return { date: isoToUs(iso) };
+};
 // A double click on "Enter payment" sends the form twice: the same amount, method and reference for the same target within a few seconds is refused once.
 const recent = ((globalThis as unknown as { __payDup?: Map<string, number> }).__payDup ??= new Map<string, number>());
 const twice = (target: string, amount: number, method: string, ref: string) => {
@@ -63,7 +71,7 @@ export const addPayment = act("addPayment", async (f: F) => {
   if (twice(`wr${w.id}`, paid, method, s(f, "ref"))) back(wrPath(w.id), { err: DUP });
   // A card payment: the fee (3% + $0.30) goes on the receipt and the customer pays it with the amount.
   const fee = isCardMethod(method) ? addCardFee(w, paid) : 0;
-  w.payments.push({ date: nowStr(), time: timeNow(), amount: r2(paid + fee), method, ref: s(f, "ref") });
+  w.payments.push({ ...payWhen(f, wrPath(w.id)), amount: r2(paid + fee), method, ref: s(f, "ref") });
   rememberName(db.payMethods, method);
   back(wrPath(w.id), { ok: `Payment of ${money(paid + fee)} by ${method} added${fee ? ` (${money(paid)} + ${money(fee)} card fee: charge ${money(paid + fee)} on the card)` : ""}. ${balance(w) > 0 ? `Balance left: ${money(balance(w))}.` : "Paid in full."}` });
 });
@@ -88,7 +96,7 @@ export const receivePayment = act("receivePayment", async (f: F) => {
   if (amount > 1_000_000) back(here, { err: "That amount is more than $1,000,000: check it, or enter it in several payments." });
   if (!method || method.length > 30) back(here, { err: "Choose how the customer paid (or type a new payment method)." });
   if (twice(`c${c!.no}`, r2(amount), method, ref)) back(here, { err: DUP });
-  const batch = `PAY-${db.n.pay++}`, date = nowStr(), time = timeNow();
+  const batch = `PAY-${db.n.pay++}`, { date, time } = payWhen(f, here);
   let left = r2(amount);
   // Receipts with a balance and the balances that are on no invoice (account balances): all paid oldest first.
   type Item = { date: string; id: string; w?: (typeof db.wrs)[number]; d?: Debt };
@@ -111,7 +119,7 @@ export const receivePayment = act("receivePayment", async (f: F) => {
       (first.w ?? first.d!).payments.push({ date, time, amount: fee, method, ref, batch });
     }
   }
-  if (left > 0) (c!.creditLog ??= []).push({ date, time, amount: left, note: `Paid more than owed (${method})`, batch, method, ref });
+  if (left > 0) (c!.creditLog ??= []).push({ date, time: time ?? "", amount: left, note: `Paid more than owed (${method})`, batch, method, ref });
   rememberName(db.payMethods, method);
   back(`${PY}/${batch}`);
 });
@@ -218,7 +226,7 @@ export const addOrderPayment = act("addOrderPayment", async (f: F) => {
   if (amount > orderBalance(o) + 0.001) back(orderPath(o.id), { err: `That's more than the balance of ${money(orderBalance(o))}.` });
   if (!method || method.length > 30) back(orderPath(o.id), { err: "Choose how the customer paid (or type a new payment method)." });
   if (twice(`o${o.id}`, r2(amount), method, s(f, "ref"))) back(orderPath(o.id), { err: DUP });
-  o.payments.push({ date: nowStr(), time: timeNow(), amount: r2(amount), method, ref: s(f, "ref") });
+  o.payments.push({ ...payWhen(f, orderPath(o.id)), amount: r2(amount), method, ref: s(f, "ref") });
   rememberName(db.payMethods, method);
   if (orderBalance(o) <= 0 && o.status === "Invoiced") o.status = "Paid";
   back(orderPath(o.id), { ok: `Payment of ${money(r2(amount))} by ${method} added. ${orderBalance(o) > 0 ? `Balance left: ${money(orderBalance(o))}.` : "Paid in full: JP's can buy the order."}` });
@@ -298,12 +306,17 @@ export const notifyOrderEmail = act("notifyOrderEmail", async (id: string, chann
   if (!o.items.length) back(to, { err: "Add at least one item before e-mailing the order." });
   result(to, "order", o.id, await sendOrder(o, channel ?? "both"));
 });
+export const notifyBalance = act("notifyBalance", async (no: number, channel?: string) => {
+  const c = db.customers.find((x) => x.no === no);
+  if (!c) return;
+  result(`/customers/${c.no}`, "balance", String(c.no), await sendBalance(c.no, channel ?? "both"));
+});
 // Tells again, one channel only, those whose e-mail or WhatsApp message did not go.
 export const notifyRetry = act("notifyRetry", async (kind: string, channel: string, ids: string, ret: string) => {
   const list = ids.split(",").filter(Boolean).slice(0, 100), nm: string[] = [], nw: string[] = [];
   let sent = 0;
   for (const id of list) {
-    const r = kind === "order" ? (db.orders.find((x) => x.id === id) ? await sendOrder(db.orders.find((x) => x.id === id)!, channel) : null) : (db.wrs.find((x) => x.id === id)?.invoice ? await sendInvoice(db.wrs.find((x) => x.id === id)!, channel) : null);
+    const r = kind === "balance" ? await sendBalance(Number(id), channel) : kind === "order" ? (db.orders.find((x) => x.id === id) ? await sendOrder(db.orders.find((x) => x.id === id)!, channel) : null) : (db.wrs.find((x) => x.id === id)?.invoice ? await sendInvoice(db.wrs.find((x) => x.id === id)!, channel) : null);
     if (!r) continue;
     if (r.mailErr) nm.push(id); else if (r.mailErr === "") sent++;
     if (r.waErr !== null && waFailed(r.waErr)) nw.push(id); else if (r.waErr !== null) sent++;
@@ -354,7 +367,7 @@ export const payDebt = act("payDebt", async (f: F) => {
   // A card payment: the fee (3% + $0.30) is added to this balance and paid with it.
   const fee = isCardMethod(method) ? cardFee(r2(amount)) : 0;
   if (fee) { d.amount = r2(d.amount + fee); d.note = `${d.note} + card fee`.slice(0, 120); }
-  d.payments.push({ date: nowStr(), time: timeNow(), amount: r2(amount + fee), method, ref: s(f, "ref"), batch });
+  d.payments.push({ ...payWhen(f, here), amount: r2(amount + fee), method, ref: s(f, "ref"), batch });
   rememberName(db.payMethods, method);
   back(`${PY}/${batch}`);
 });

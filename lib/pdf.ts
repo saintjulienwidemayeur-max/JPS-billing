@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
+import { usToday } from "./clock";
 import { DISCLAIMER, ESTIMATE_NOTE } from "./disclaimer";
 import { COMPANY, HAITI } from "./company";
 import { cardFees } from "./pricing";
@@ -137,9 +138,9 @@ export async function invoicePdf(w: WR): Promise<Uint8Array> {
   const lines = docLines(w);
   d.header([COMPANY.name, `${COMPANY.address}, ${COMPANY.city}`, COMPANY.phone]);
   d.text(`Invoice ${w.invoice ?? ""}`, 0, 20, { bold: true, color: BLUE, right: d.W - M }); d.y -= 30;
-  const meta: [string, string][] = [["Invoice date", w.invoiceDate ?? w.date], ["Shipment ID", shipment || "-"], ["Receipt", wrCode(w)], ["Type", `${w.ship}${toUSA(w) ? " - Haiti to Miami" : ""}`], ["Status", payStatus(w)], ["Representative", repOf(w.rep)?.initials ?? "-"]];
+  const meta: [string, string][] = [["Invoice date", w.invoiceDate ?? w.date], ["Shipment ID", shipment || "-"], ["Receipt", wrCode(w)]];
   meta.forEach(([k, v], i) => { const x = M + (CW / 3) * (i % 3), yy = d.y - Math.floor(i / 3) * 28; d.page.drawText(safe(k), { x, y: yy - 8, size: 8, font: d.font, color: GREY }); d.page.drawText(safe(v), { x, y: yy - 21, size: 10, font: d.bold, color: BLACK }); });
-  d.y -= 62;
+  d.y -= 36;
   const top = d.y;
   d.text("Bill To", M, 8.5, { color: GREY }); d.y -= 11; d.text(w.customer, M, 10.5, { bold: true }); d.y -= 14;
   for (const l of [c?.billing, w.email].filter(Boolean) as string[]) d.para(l, M, 240, 9.5);
@@ -153,12 +154,9 @@ export async function invoicePdf(w: WR): Promise<Uint8Array> {
   for (const l of lines) d.row([{ w: CW - 190, t: l.desc }, { w: 55, t: String(l.qty ?? "1.00"), right: true }, { w: 65, t: l.rate !== undefined ? money(l.rate) : money(Math.abs(l.amount)), right: true }, { w: 70, t: `${l.amount < 0 ? "-" : ""}${money(Math.abs(l.amount))}`, right: true }]);
   d.y -= 8;
   for (const [k, v, b] of [["Total", money(total(w)), true], ["Paid", money(paidAmt(w))], ["Balance", money(balance(w)), true]] as [string, string, boolean?][]) { d.need(16); d.text(k, d.W - M - 190, 10.5, { bold: !!b }); d.text(v, 0, 10.5, { bold: !!b, right: d.W - M }); d.y -= 16; }
-  if (w.payments.length) { d.y -= 6; d.para("Payments received", M, CW, 9.5, { bold: true, gap: 1 }); for (const p of w.payments) d.row([{ w: CW - 90, t: `${p.date} - ${p.method}${p.ref ? ` - ${p.ref}` : ""}` }, { w: 90, t: money(p.amount), right: true }], 8.5); }
+  if (w.payments.length > 1) { d.y -= 6; d.para("Payments received", M, CW, 9.5, { bold: true, gap: 1 }); for (const p of w.payments) d.row([{ w: CW - 90, t: `${p.date} - ${p.method}${p.ref ? ` - ${p.ref}` : ""}` }, { w: 90, t: money(p.amount), right: true }], 8.5); }
   if (balance(w) > 0 && payUrl(w)) {
     d.y -= 8; d.para(`Pay this invoice online (bank card, Apple Pay, Google Pay, Cash App, Link): ${payUrl(w)}`, M, CW, 9.5, { bold: true });
-  } else if (balance(w) > 0) {
-    const card = cardFees(balance(w)); d.y -= 8;
-    d.para(`If paying the balance (${money(balance(w))}) by credit card: ${money(card.invoice.total)} (3% + $0.30 fee = ${money(card.invoice.fee)}, added when the card is used)`, M, CW, 8.5, { color: GREY });
   }
   d.y -= 8; d.para("Thank you for your business. Questions? Write to us or call " + COMPANY.phone + ".", M, CW, 9, { color: GREY });
   return d.bytes();
@@ -200,5 +198,25 @@ export async function orderPdf(o: Order): Promise<Uint8Array> {
   if (paid > 0) sums.push(["Paid", money(paid)], [bal > 0 ? "Balance now due" : "PAID IN FULL", money(Math.max(0, bal)), true]);
   for (const [k, v, b] of sums) { d.need(16); d.text(k, d.W - M - 230, 10, { bold: !!b }); d.text(v, 0, 10, { bold: !!b, right: d.W - M }); d.y -= 15; }
   d.y -= 8; d.para(orderNotes(o), M, CW, 9, { color: GREY });
+  return d.bytes();
+}
+
+// ---------- Balance statement (what a customer still owes: one line per unpaid invoice / order / account balance) ----------
+export type OweLine = { date: string; what: string; total: number; paid: number; owed: number };
+export async function balancePdf(c: { name: string; no: number; billing?: string }, lines: OweLine[], credit: number): Promise<Uint8Array> {
+  const d = await Doc.make(), M = d.M, CW = d.W - 2 * M;
+  d.header([COMPANY.name, `${COMPANY.address}, ${COMPANY.city}`, COMPANY.phone]);
+  d.text("Balance due", M, 22, { bold: true, color: BLUE }); d.text(usToday(), 0, 11, { right: d.W - M }); d.y -= 30;
+  d.text(c.name, M, 11, { bold: true }); d.text(`Customer ${c.no}`, 0, 10, { right: d.W - M }); d.y -= 14;
+  if (c.billing) { d.para(c.billing, M, 280, 9.5); }
+  d.y -= 10;
+  d.row([{ w: 70, t: "Date" }, { w: CW - 70 - 225, t: "Invoice" }, { w: 75, t: "Total", right: true }, { w: 75, t: "Paid", right: true }, { w: 75, t: "Balance", right: true }], 9, { head: true });
+  if (!lines.length) d.row([{ w: CW, t: "Nothing to pay." }]);
+  for (const l of lines) d.row([{ w: 70, t: l.date }, { w: CW - 70 - 225, t: l.what }, { w: 75, t: money(l.total), right: true }, { w: 75, t: money(l.paid), right: true }, { w: 75, t: money(l.owed), right: true }]);
+  const sum = r2(lines.reduce((a, l) => a + l.owed, 0));
+  d.y -= 8; d.need(30);
+  d.text("Total balance due", d.W - M - 230, 11, { bold: true }); d.text(money(sum), 0, 11, { bold: true, right: d.W - M }); d.y -= 16;
+  if (credit > 0) { d.text("Credit on file", d.W - M - 230, 10); d.text(money(credit), 0, 10, { right: d.W - M }); d.y -= 15; }
+  d.y -= 8; d.para("Thank you for your business. Questions? Write to us or call " + COMPANY.phone + ".", M, CW, 9, { color: GREY });
   return d.bytes();
 }

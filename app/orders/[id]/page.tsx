@@ -1,3 +1,4 @@
+import { isoToday } from "@/lib/clock";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
@@ -84,10 +85,11 @@ export default async function Page({ params, searchParams }: { params: Promise<{
           </table>
         )}
         {orderBalance(o) > 0 && (
-          <form action={addOrderPayment} className="mt-3 grid gap-2 sm:grid-cols-[8rem_11rem_1fr_auto]">
+          <form action={addOrderPayment} className="mt-3 grid gap-2 sm:grid-cols-[8rem_10rem_11rem_1fr_auto]">
             <input type="hidden" name="order" value={o.id} />
             <Input name="amount" type="number" step="0.01" min="0.01" max={orderBalance(o)} defaultValue={orderBalance(o)} aria-label="Order payment amount" required />
-            <Input name="method" list="payMethods" placeholder="Paid by (pick or type new)" aria-label="Order payment method" maxLength={30} required />
+            <Input name="date" type="date" defaultValue={isoToday()} max={isoToday()} aria-label="Date paid" title="Date the customer paid (an earlier day for a payment entered late)" />
+              <Input name="method" list="payMethods" placeholder="Paid by (pick or type new)" aria-label="Order payment method" maxLength={30} required />
             <Input name="ref" placeholder="Check # or confirmation" aria-label="Order payment reference" />
             <Button type="submit">Add payment</Button>
             <datalist id="payMethods">{db.payMethods.map((m) => <option key={m} value={m} />)}</datalist>

@@ -1,3 +1,4 @@
+import { isoToday } from "@/lib/clock";
 import Link from "next/link";
 import { WhLink } from "@/components/wh-link";
 import { db, creditOf, balance, total, wrCode, money, r2, debtBalance , priced } from "@/lib/wh-store";
@@ -32,10 +33,11 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
           <h2 className="font-bold">Pay invoice {inv.invoice} <span className="text-sm font-normal text-zinc-500">· {inv.customer} · {wrCode(inv)}</span></h2>
           <p className="mt-1 text-sm">Total <b>{money(total(inv))}</b> · paid <b>{money(inv.payments.reduce((a, p) => a + p.amount, 0))}</b> · balance <b>{money(balance(inv))}</b></p>
           {balance(inv) > 0 ? (
-            <form action={addPayment} className="mt-3 grid gap-2 sm:grid-cols-[8rem_12rem_1fr_auto]">
+            <form action={addPayment} className="mt-3 grid gap-2 sm:grid-cols-[8rem_10rem_12rem_1fr_auto]">
               <input type="hidden" name="wr" value={inv.id} />
               <Input name="amount" type="number" step="0.01" min="0.01" max={balance(inv)} defaultValue={balance(inv)} aria-label="Amount received" required />
-              <Input name="method" list="payMethods" placeholder="Paid by (pick or type new)" aria-label="Paid by" maxLength={30} required />
+              <Input name="date" type="date" defaultValue={isoToday()} max={isoToday()} aria-label="Date paid" title="Date the customer paid (an earlier day for a payment entered late)" />
+            <Input name="method" list="payMethods" placeholder="Paid by (pick or type new)" aria-label="Paid by" maxLength={30} required />
               <Input name="ref" placeholder="Check # or confirmation" aria-label="Reference" />
               <Button type="submit">Enter payment</Button>
               <datalist id="payMethods">{db.payMethods.map((m) => <option key={m} value={m} />)}</datalist>
@@ -69,9 +71,10 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
             </table>
           )}
           {openDebts.length > 0 && <p className="mt-2 text-sm text-zinc-600">Account balances (not on an invoice): {openDebts.map((d) => `${d.note} ${money(debtBalance(d))}`).join(" · ")}. <Link href={`/customers/${c.no}`} className="text-brand underline">Manage</Link></p>}
-          <form action={receivePayment} className="mt-4 grid gap-2 sm:grid-cols-[8rem_12rem_1fr_auto]">
+          <form action={receivePayment} className="mt-4 grid gap-2 sm:grid-cols-[8rem_10rem_12rem_1fr_auto]">
             <input type="hidden" name="cust" value={c.no} />
             <Input name="amount" type="number" step="0.01" min="0.01" placeholder="Amount ($)" aria-label="Amount received" defaultValue={owed > 0 ? owed : undefined} required />
+            <Input name="date" type="date" defaultValue={isoToday()} max={isoToday()} aria-label="Date paid" title="Date the customer paid (an earlier day for a payment entered late)" />
             <Input name="method" list="payMethods" placeholder="Paid by (pick or type new)" aria-label="Paid by" maxLength={30} required />
             <Input name="ref" placeholder="Check # or confirmation" aria-label="Reference" />
             <Button type="submit">Receive payment</Button>
