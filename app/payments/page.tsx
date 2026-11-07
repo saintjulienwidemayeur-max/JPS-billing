@@ -77,6 +77,7 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
             <Input name="date" type="date" defaultValue={isoToday()} max={isoToday()} aria-label="Date paid" title="Date the customer paid (an earlier day for a payment entered late)" />
             <Input name="method" list="payMethods" placeholder="Paid by (pick or type new)" aria-label="Paid by" maxLength={30} required />
             <Input name="ref" placeholder="Check # or confirmation" aria-label="Reference" />
+            <label className="flex items-center gap-1.5 text-xs text-zinc-700 sm:col-span-full"><input type="checkbox" name="notify" value="1" defaultChecked className="h-4 w-4" /> Send the payment receipt to the customer now (e-mail + WhatsApp)</label>
             <Button type="submit">Receive payment</Button>
             <datalist id="payMethods">{db.payMethods.map((m) => <option key={m} value={m} />)}</datalist>
           </form>

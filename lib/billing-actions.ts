@@ -121,7 +121,10 @@ export const receivePayment = act("receivePayment", async (f: F) => {
   }
   if (left > 0) (c!.creditLog ??= []).push({ date, time: time ?? "", amount: left, note: `Paid more than owed (${method})`, batch, method, ref });
   rememberName(db.payMethods, method);
-  back(`${PY}/${batch}`);
+  // The customer gets the payment receipt by e-mail and WhatsApp right away (a failure never undoes the payment; the page offers to send again).
+  if (!s(f, "notify")) back(`${PY}/${batch}`, { ok: "Payment received. The customer was not notified (box unchecked)." });
+  const sent = await sendPaymentNotice(batch, "both").catch((e): NResult => ({ mailErr: String(e instanceof Error ? e.message : e), waErr: null }));
+  result(`${PY}/${batch}`, "payment", batch, sent);
 });
 export const applyCredit = act("applyCredit", async (wr: string) => {
   const w = db.wrs.find((x) => x.id === wr), c = w && custOf(w);
@@ -373,7 +376,9 @@ export const payDebt = act("payDebt", async (f: F) => {
   if (fee) { d.amount = r2(d.amount + fee); d.note = `${d.note} + card fee`.slice(0, 120); }
   d.payments.push({ ...payWhen(f, here), amount: r2(amount + fee), method, ref: s(f, "ref"), batch });
   rememberName(db.payMethods, method);
-  back(`${PY}/${batch}`);
+  if (!s(f, "notify")) back(`${PY}/${batch}`, { ok: "Payment received. The customer was not notified (box unchecked)." });
+  const sent = await sendPaymentNotice(batch, "both").catch((e): NResult => ({ mailErr: String(e instanceof Error ? e.message : e), waErr: null }));
+  result(`${PY}/${batch}`, "payment", batch, sent);
 });
 export const deleteDebt = act("deleteDebt", async (id: string) => {
   const d = db.debts.find((x) => x.id === id);
