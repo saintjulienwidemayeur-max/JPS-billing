@@ -4,7 +4,7 @@ import { db, isCardMethod, addCardFee, nowStr, charges, balance, money, wrCode, 
 import { act } from "./act";
 import { cardFee } from "./pricing";
 import { requireUser } from "./users";
-import { sendBalance } from "./balance-notify";
+import { sendBalance, sendPaymentNotice } from "./balance-notify";
 import { queueMail, emailInvoice, emailOrder } from "./auto-mail";
 import { waNowInvoice, waNowOrder, waFailed, waSay } from "./whatsapp";
 import { invoicePdf, orderPdf } from "./pdf";
@@ -311,12 +311,16 @@ export const notifyBalance = act("notifyBalance", async (no: number, channel?: s
   if (!c) return;
   result(`/customers/${c.no}`, "balance", String(c.no), await sendBalance(c.no, channel ?? "both"));
 });
+export const notifyPayment = act("notifyPayment", async (key: string, channel?: string) => {
+  const to = key.includes(":") ? `/receipts/${key.split(":")[0]}/payments/${key.split(":")[1]}` : `/payments/${encodeURIComponent(key)}`;
+  result(to, "payment", key, await sendPaymentNotice(key, channel ?? "both"));
+});
 // Tells again, one channel only, those whose e-mail or WhatsApp message did not go.
 export const notifyRetry = act("notifyRetry", async (kind: string, channel: string, ids: string, ret: string) => {
   const list = ids.split(",").filter(Boolean).slice(0, 100), nm: string[] = [], nw: string[] = [];
   let sent = 0;
   for (const id of list) {
-    const r = kind === "balance" ? await sendBalance(Number(id), channel) : kind === "order" ? (db.orders.find((x) => x.id === id) ? await sendOrder(db.orders.find((x) => x.id === id)!, channel) : null) : (db.wrs.find((x) => x.id === id)?.invoice ? await sendInvoice(db.wrs.find((x) => x.id === id)!, channel) : null);
+    const r = kind === "payment" ? await sendPaymentNotice(id, channel) : kind === "balance" ? await sendBalance(Number(id), channel) : kind === "order" ? (db.orders.find((x) => x.id === id) ? await sendOrder(db.orders.find((x) => x.id === id)!, channel) : null) : (db.wrs.find((x) => x.id === id)?.invoice ? await sendInvoice(db.wrs.find((x) => x.id === id)!, channel) : null);
     if (!r) continue;
     if (r.mailErr) nm.push(id); else if (r.mailErr === "") sent++;
     if (r.waErr !== null && waFailed(r.waErr)) nw.push(id); else if (r.waErr !== null) sent++;

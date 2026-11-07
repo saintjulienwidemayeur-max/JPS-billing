@@ -246,3 +246,25 @@ export async function balancePdf(c: { name: string; no: number; billing?: string
   d.y -= 8; d.para("Thank you for your business. Questions? Write to us or call " + COMPANY.phone + ".", M, CW, 9, { color: GREY });
   return d.bytes();
 }
+
+// ---------- Payment receipt for one "Receive payment" (a batch: it can pay several invoices) ----------
+export async function batchReceiptPdf(batch: string): Promise<Uint8Array> {
+  const d = await Doc.make(), M = d.M, CW = d.W - 2 * M;
+  const allocs = db.wrs.flatMap((w) => w.payments.filter((p) => p.batch === batch).map((p) => ({ w, p })));
+  const dallocs = db.debts.flatMap((x) => x.payments.filter((p) => p.batch === batch).map((p) => ({ x, p })));
+  const credits = db.customers.flatMap((c) => (c.creditLog ?? []).filter((e) => e.batch === batch).map((e) => ({ c, e })));
+  const first = allocs[0]?.p ?? dallocs[0]?.p ?? credits[0]?.e;
+  const cust = allocs[0] ? db.customers.find((x) => x.no === allocs[0].w.cust) : dallocs[0] ? db.customers.find((c) => c.no === dallocs[0].x.cust) : credits[0]?.c;
+  const applied = r2(allocs.reduce((a, x) => a + x.p.amount, 0) + dallocs.reduce((a, x) => a + x.p.amount, 0)), kept = r2(credits.reduce((a, x) => a + x.e.amount, 0));
+  d.header([COMPANY.name, `${COMPANY.address}, ${COMPANY.city}`, COMPANY.phone]);
+  d.text("Payment Receipt", M, 22, { bold: true, color: BLUE }); d.text(`No. ${batch}`, 0, 11, { right: d.W - M }); d.y -= 30;
+  d.text(`Received from: ${cust?.name ?? ""}`, M, 11, { bold: true }); d.text(first ? `${first.date}${first.time ? ` ${first.time}` : ""}` : "", 0, 10, { right: d.W - M }); d.y -= 16;
+  d.text(`Paid by: ${first && "method" in first ? first.method : ""}${first && "ref" in first && first.ref ? ` - ${first.ref}` : ""}`, M, 10); d.y -= 24;
+  d.row([{ w: CW - 240, t: "Applied to" }, { w: 80, t: "Paid now", right: true }, { w: 80, t: "Balance left", right: true }, { w: 80, t: "" }], 9, { head: true });
+  for (const { w, p } of allocs) d.row([{ w: CW - 240, t: `${w.invoice ? w.invoice + " - " : ""}${wrCode(w)}` }, { w: 80, t: money(p.amount), right: true }, { w: 80, t: money(balance(w)), right: true }, { w: 80, t: "" }]);
+  for (const { x, p } of dallocs) d.row([{ w: CW - 240, t: `Account balance: ${x.note}` }, { w: 80, t: money(p.amount), right: true }, { w: 80, t: money(r2(x.amount - x.payments.reduce((a, q) => a + q.amount, 0))), right: true }, { w: 80, t: "" }]);
+  d.y -= 10;
+  for (const [k, v, b] of [["Amount received", money(r2(applied + kept)), true], ...(kept > 0 ? [["Kept as customer credit", money(kept)]] : [])] as [string, string, boolean?][]) { d.need(18); d.text(k, d.W - M - 220, 10, { bold: !!b }); d.text(v, 0, 10, { bold: !!b, right: d.W - M }); d.y -= 16; }
+  d.y -= 10; d.para("Thank you for your business. Questions? Write to us or call " + COMPANY.phone + ".", M, CW, 9, { color: GREY });
+  return d.bytes();
+}

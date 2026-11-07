@@ -2,6 +2,8 @@ import Link from "next/link";
 import { WhLink } from "@/components/wh-link";
 import { notFound } from "next/navigation";
 import { db, balance, total, wrCode, money, r2, creditOf, debtBalance , priced } from "@/lib/wh-store";
+import { NotifyForm } from "@/components/notify";
+import { notifyPayment } from "@/lib/billing-actions";
 import { PrintButton } from "@/components/print-button";
 
 const th = "px-2 py-1 font-semibold", td = "px-2 py-1";
@@ -22,7 +24,7 @@ export default async function Page({ params }: { params: Promise<{ batch: string
       <div className="flex items-start justify-between gap-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo.png" alt="JP's Logistics & More" className="h-16 w-auto" />
-        <div className="text-right"><h1 className="!text-2xl">Payment Receipt</h1><div className="text-zinc-600">No. {batch}</div><div className="no-print mt-2"><PrintButton /></div></div>
+        <div className="text-right"><h1 className="!text-2xl">Payment Receipt</h1><div className="text-zinc-600">No. {batch}</div><div className="no-print mt-2"><PrintButton /></div><div className="no-print mt-2"><NotifyForm action={notifyPayment.bind(null, batch, "both")} label="Send the receipt (e-mail + WhatsApp)" className="inline-flex h-9 items-center rounded-md border border-brand bg-brand px-3 font-medium text-white" title="Sends the payment receipt (PDF) to the customer by e-mail and WhatsApp" /></div></div>
       </div>
       <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-2">
         <div><dt className="text-xs text-zinc-500">Received from</dt><dd className="font-semibold">{c?.name}</dd>{c && <dd className="text-zinc-600">Customer {c.no}</dd>}</div>
