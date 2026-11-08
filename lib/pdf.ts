@@ -8,7 +8,7 @@ import { DISCLAIMER, ESTIMATE_NOTE } from "./disclaimer";
 import { COMPANY, HAITI, PAY } from "./company";
 import { cardFees } from "./pricing";
 import { payUrl } from "./paylink";
-import { db, totalMeasure, vol, cuft, chargeable, r2, charges, credits, quote, insuranceFee, total, paidAmt, balance, payStatus, money, wrCode, docLines, custOf, shipperOf, receiverOf, toUSA, freightFee, freightQty, freightDesc, contentsOf, repOf, orderLine, orderSubtotal, orderFee, orderTotal, orderPaid, orderBalance, orderNotes, type WR, type Order } from "./wh-store";
+import { db, shipName, totalMeasure, vol, cuft, chargeable, r2, charges, credits, quote, insuranceFee, total, paidAmt, balance, payStatus, money, wrCode, docLines, custOf, shipperOf, receiverOf, toUSA, freightFee, freightQty, freightDesc, contentsOf, repOf, orderLine, orderSubtotal, orderFee, orderTotal, orderPaid, orderBalance, orderNotes, type WR, type Order } from "./wh-store";
 
 const MAP: Record<string, string> = { "−": "-", "–": "-", "—": "-", "·": "-", "•": "*", "‘": "'", "’": "'", "“": '"', "”": '"', "…": "...", "→": "->", "×": "x", "≥": ">=", "€": "EUR", " ": " " };
 const safe = (s: unknown) => String(s ?? "").normalize("NFC").replace(/[^\x20-\x7e¡-ÿ]/g, (c) => MAP[c] ?? (c === "\n" ? " " : "?"));
@@ -83,7 +83,7 @@ export async function receiptPdf(w: WR): Promise<Uint8Array> {
   const d = await Doc.make(), c = custOf(w), M = d.M, CW = d.W - 2 * M;
   const sh = shipperOf(w), rc = receiverOf(w), consignee = rc.name, place = [c?.consigneeCity, c?.consigneeCountry].filter(Boolean).join(", "), phone = rc.phone;
   const office = toUSA(w) ? HAITI : COMPANY; // received at the Haiti office when it goes to the USA
-  d.header([longDate(w.date), COMPANY.name, `${office.address}, ${office.city}`, office.phone]);
+  d.header([longDate(w.date), COMPANY.name, ...(toUSA(w) ? [`${office.address}, ${office.city}`] : []), office.phone]); // no Miami street address on the receipt
   d.y -= 4; d.text("Warehouse Receipt", 0, 20, { bold: true, right: d.W / 2 + d.width("Warehouse Receipt", 20, true) / 2 }); d.y -= 30;
   const top = d.y;
   d.text("Shipper", M, 9, { color: GREY }); d.text(`${sh.name} (customer ${w.cust})`, M + 48, 10, { bold: true }); d.y -= 14;
@@ -94,7 +94,7 @@ export async function receiptPdf(w: WR): Promise<Uint8Array> {
   const afterLeft = d.y; d.y = top;
   d.page.drawRectangle({ x: d.W - M - 150, y: d.y - 34, width: 150, height: 34, borderColor: GREY, borderWidth: 1.5 });
   d.text("WR #", 0, 9, { color: GREY, right: d.W - M - 150 + 38 }); d.page.drawText(safe(wrCode(w)), { x: d.W - M - 108, y: d.y - 23, size: 15, font: d.bold, color: BLACK });
-  d.y -= 44; d.text(`Ship Type: ${w.ship}   Type: ${w.kind ?? "Personal"}${w.dest ? `   To: ${w.dest}` : ""}${w.route ? `   Route: ${w.route}` : ""}`, 0, 9.5, { right: d.W - M }); d.y = Math.min(afterLeft, d.y - 14) - 10;
+  d.y -= 44; d.text(`Ship Type: ${shipName(w)}   Type: ${w.kind ?? "Personal"}${w.dest ? `   To: ${w.dest}` : ""}${w.route ? `   Route: ${w.route}` : ""}`, 0, 9.5, { right: d.W - M }); d.y = Math.min(afterLeft, d.y - 14) - 10;
   // pieces
   const cols = [{ w: 48, t: "Item #" }, { w: 215, t: "Description" }, { w: 55, t: "Weight", right: true }, { w: 45, t: "CUFT", right: true }, { w: CW - 363, t: "Contents" }];
   d.row(cols, 9, { head: true });
@@ -266,5 +266,23 @@ export async function batchReceiptPdf(batch: string): Promise<Uint8Array> {
   d.y -= 10;
   for (const [k, v, b] of [["Amount received", money(r2(applied + kept)), true], ...(kept > 0 ? [["Kept as customer credit", money(kept)]] : [])] as [string, string, boolean?][]) { d.need(18); d.text(k, d.W - M - 220, 10, { bold: !!b }); d.text(v, 0, 10, { bold: !!b, right: d.W - M }); d.y -= 16; }
   d.y -= 10; d.para("Thank you for your business. Questions? Write to us or call " + COMPANY.phone + ".", M, CW, 9, { color: GREY });
+  return d.bytes();
+}
+
+// ---------- Invoice report (the invoices of the Invoices page, with the final totals) ----------
+export async function invoiceReportPdf(rows: WR[], title: string): Promise<Uint8Array> {
+  const d = await Doc.make(), M = d.M, CW = d.W - 2 * M;
+  const dm = (w: WR) => ({ p: w.pieces.length, lbs: r2(w.pieces.reduce((a, x) => a + x.lbs, 0)), cu: r2(w.pieces.reduce((a, x) => a + cuft(x), 0)) });
+  d.header([COMPANY.name, COMPANY.phone]);
+  d.text("Invoice report", M, 20, { bold: true, color: BLUE }); d.text(usToday(), 0, 11, { right: d.W - M }); d.y -= 26;
+  if (title) { d.para(title, M, CW, 9, { color: GREY }); }
+  d.y -= 6;
+  const cols = [{ w: 50, t: "Invoice" }, { w: 52, t: "Date" }, { w: 56, t: "Receipt" }, { w: CW - 50 - 52 - 56 - 28 - 38 - 38 - 156, t: "Bill To" }, { w: 28, t: "Pcs", right: true }, { w: 38, t: "Lbs", right: true }, { w: 38, t: "Cu ft", right: true }, { w: 52, t: "Amount", right: true }, { w: 52, t: "Paid", right: true }, { w: 52, t: "Balance", right: true }];
+  d.row(cols, 8, { head: true });
+  for (const w of rows) { const x = dm(w); d.row([{ w: cols[0].w, t: w.invoice ?? "" }, { w: cols[1].w, t: w.invoiceDate ?? w.date }, { w: cols[2].w, t: wrCode(w) }, { w: cols[3].w, t: w.customer }, { w: 28, t: String(x.p), right: true }, { w: 38, t: String(x.lbs), right: true }, { w: 38, t: String(x.cu), right: true }, { w: 52, t: money(total(w)), right: true }, { w: 52, t: money(paidAmt(w)), right: true }, { w: 52, t: money(balance(w)), right: true }], 8); }
+  const all = rows.map(dm), sum = (f: (x: ReturnType<typeof dm>) => number) => r2(all.reduce((a, x) => a + f(x), 0));
+  d.need(110); d.y -= 14;
+  d.text("FINAL TOTALS", M, 11, { bold: true, color: BLUE }); d.y -= 18;
+  for (const [k, v, b] of [["Invoices", String(rows.length)], ["Total pieces", String(sum((x) => x.p))], ["Total weight", `${sum((x) => x.lbs)} lbs`], ["Total cubic feet", `${sum((x) => x.cu)} cu ft`], ["Total amount", money(r2(rows.reduce((a, w) => a + total(w), 0))), true], ["Total paid", money(r2(rows.reduce((a, w) => a + paidAmt(w), 0)))], ["Total balance due", money(r2(rows.reduce((a, w) => a + balance(w), 0))), true]] as [string, string, boolean?][]) { d.need(16); d.text(k, M, 10, { bold: !!b }); d.text(v, 0, 10, { bold: !!b, right: M + 220 }); d.y -= 15; }
   return d.bytes();
 }

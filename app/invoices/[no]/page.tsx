@@ -3,7 +3,7 @@ import { NotifyForm } from "@/components/notify";
 import { cancelInvoice, voidPayment, notifyInvoiceEmail } from "@/lib/billing-actions";
 import { listDocs } from "@/lib/persist";
 import { ConfirmSubmit } from "@/components/confirm-submit";
-import { db, docLines, custOf, repOf, wrCode, total, paidAmt, balance, payStatus, money, insuranceFee, quote, r2, freightFee, freightQty, freightDesc, receiverOf, toUSA } from "@/lib/wh-store";
+import { db, shipName, docLines, custOf, repOf, wrCode, total, paidAmt, balance, payStatus, money, insuranceFee, quote, r2, freightFee, freightQty, freightDesc, receiverOf, toUSA } from "@/lib/wh-store";
 import { cardFees } from "@/lib/pricing";
 import { shortDate } from "@/lib/fmt";
 import { PrintButton } from "@/components/print-button";
@@ -52,7 +52,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
         <div><dt className="text-xs text-zinc-500">Invoice date</dt><dd className="font-medium">{shortDate(w.invoiceDate ?? w.date)}</dd></div>
         <div><dt className="text-xs text-zinc-500">Shipment ID</dt><dd className="font-medium">{shipment || "–"}</dd></div>
         <div><dt className="text-xs text-zinc-500">Receipt</dt><dd className="font-medium">{wrCode(w)}</dd></div>
-        <div><dt className="text-xs text-zinc-500">Type</dt><dd>{w.ship}{toUSA(w) && " · Haiti → Miami"}</dd></div>
+        <div><dt className="text-xs text-zinc-500">Type</dt><dd>{shipName(w)}{toUSA(w) && " · Haiti → Miami"}</dd></div>
         <div><dt className="text-xs text-zinc-500">Status</dt><dd>{payStatus(w)}</dd></div>
         <div><dt className="text-xs text-zinc-500">Representative</dt><dd>{repOf(w.rep)?.initials ?? "–"}</dd></div>
       </dl>

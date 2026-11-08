@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { WhLink } from "@/components/wh-link";
+import { invoiceRows, reportTotals } from "@/lib/invoice-report";
+import { PrintButton } from "@/components/print-button";
 import { db, total, paidAmt, balance, money, wrCode, repLabel } from "@/lib/wh-store";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,12 +14,7 @@ const PER = 100; // thousands of invoices build up: the page stays light (the to
 
 export default async function Page({ searchParams }: { searchParams: SP }) {
   const q = await searchParams;
-  const cust = (q.customer ?? "").trim().toLowerCase();
-  const rows = db.wrs.filter((w) => w.invoice
-    && (!q.ship || w.ship === q.ship)
-    && (!q.rep || w.rep === q.rep)
-    && (!cust || w.customer.toLowerCase().includes(cust) || String(w.cust) === cust)
-    && (!q.status || (q.status === "paid" ? balance(w) <= 0 : balance(w) > 0)));
+  const rows = invoiceRows(q), tot = reportTotals(rows), qs = new URLSearchParams({ ...(q.ship && { ship: q.ship }), ...(q.rep && { rep: q.rep }), ...(q.status && { status: q.status }), ...(q.customer && { customer: q.customer }) }).toString();
   const sum = (f: (w: (typeof rows)[number]) => number) => rows.reduce((a, w) => a + f(w), 0);
   const pages = Math.max(1, Math.ceil(rows.length / PER)), page = Math.min(pages, Math.max(1, Number(q.page) || 1));
   const shown = rows.slice((page - 1) * PER, page * PER);
@@ -27,9 +24,9 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
   const link = (p: number) => `/invoices?${new URLSearchParams({ ...(q.ship && { ship: q.ship }), ...(q.rep && { rep: q.rep }), ...(q.status && { status: q.status }), ...(q.customer && { customer: q.customer }), page: String(p) })}`;
   return (
     <main className="mx-auto max-w-6xl px-4 py-6">
-      <div className="flex flex-wrap items-center justify-between gap-2"><h1>Invoices</h1><a href="/invoices/export" className="text-sm font-medium text-brand underline">Download all as CSV (Excel)</a></div>
+      <div className="flex flex-wrap items-center justify-between gap-2"><h1>Invoices</h1><div className="no-print flex flex-wrap items-center gap-3 text-sm"><a href={`/invoices/report?${qs}`} className="inline-flex h-9 items-center rounded-md border border-brand px-3 font-medium text-brand">Download PDF</a><a href={`/invoices/export?${qs}`} className="font-medium text-brand underline">Download CSV (Excel)</a><PrintButton /></div></div>
       <p className="text-sm text-zinc-600">Every invoice, with what was paid and what is still owed. Make a new one in <b>Invoice</b>; enter a payment with <b>Pay</b>.</p>
-      <form method="get" className="mt-4 flex flex-wrap gap-2">
+      <form method="get" className="no-print mt-4 flex flex-wrap gap-2">
         <select name="ship" defaultValue={q.ship ?? ""} className={sel} aria-label="Ship type"><option value="">All ship types</option><option value="Air">Air (JPF)</option><option value="Ocean">Ocean (JPL)</option></select>
         <select name="rep" defaultValue={q.rep ?? ""} className={sel} aria-label="Representative"><option value="">All representatives</option>{db.reps.map((r) => <option key={r.id} value={r.id}>{r.name} ({r.initials})</option>)}</select>
         <select name="status" defaultValue={q.status ?? ""} className={sel} aria-label="Status"><option value="">Paid and unpaid</option><option value="unpaid">Unpaid</option><option value="paid">Paid</option></select>
@@ -51,6 +48,19 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
             </tr>))}</tbody>
           <tfoot><tr className="font-semibold"><td className={td} colSpan={5}>{rows.length} invoice{rows.length > 1 ? "s" : ""}</td><td className={td}>{money(sum(total))}</td><td className={td}>{money(sum(paidAmt))}</td><td className={td}>{money(sum(balance))}</td><td colSpan={3} /></tr></tfoot>
         </table>
+      )}
+      {rows.length > 0 && (
+        <section className="mt-6 rounded-lg border-2 border-black p-4" aria-label="Final totals">
+          <h2 className="font-bold">Final totals <span className="text-sm font-normal text-zinc-500">· all {rows.length} invoice{rows.length > 1 ? "s" : ""} of this report</span></h2>
+          <dl className="mt-2 grid max-w-md grid-cols-[1fr_auto] gap-x-8 gap-y-1">
+            <dt>Total pieces</dt><dd className="text-right">{tot.pieces}</dd>
+            <dt>Total weight</dt><dd className="text-right">{tot.lbs} lbs</dd>
+            <dt>Total cubic feet</dt><dd className="text-right">{tot.cuft} cu ft</dd>
+            <dt className="border-t pt-1 font-bold">Total amount</dt><dd className="border-t pt-1 text-right text-lg font-bold">{money(tot.amount)}</dd>
+            <dt>Total paid</dt><dd className="text-right">{money(tot.paid)}</dd>
+            <dt className="font-bold">Balance due</dt><dd className="text-right font-bold">{money(tot.balance)}</dd>
+          </dl>
+        </section>
       )}
       {pages > 1 && (
         <div className="mt-3 flex items-center justify-center gap-4 text-sm">

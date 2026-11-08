@@ -65,10 +65,15 @@ export type Prealert = {
 };
 export type Load = { shipment: string; pallet: string; wr: string; no: number; date: string; here?: string; by?: string; hereBy?: string };
 // `dir`: "USA" = goes from Haiti to Miami (absent = Miami to Haiti, as before). Same fields as the warehouse app.
-export type Shipment = { name: string; ship: Ship; cargoId: string; date: string; shipped?: string; shippedBy?: string; dir?: "USA" };
+export type Shipment = { name: string; ship: Ship; cargoId: string; date: string; shipped?: string; shippedBy?: string; dir?: "USA" | "DR" };
 export const US_DEST = "Miami";
 export const toUSA = (w: { dest?: string }) => w.dest === US_DEST;
 export const shToUSA = (sh: { dir?: string } | undefined) => sh?.dir === "USA";
+export const DR_DEST = "Saint Domingue";
+export const toDR = (w: { dest?: string }) => w.dest === DR_DEST;
+export const shToDR = (sh: { dir?: string } | undefined) => sh?.dir === "DR";
+// What the shipping method is called for the customer: "Air DR" / "Ocean DR" for the Dominican Republic, else Air / Ocean.
+export const shipName = (w: { ship: string; dest?: string }) => (toDR(w) ? `${w.ship} DR` : w.ship);
 
 // Booking info of a shipment (the old "Shipment Booking Info" form). It feeds the Bill of Lading,
 // the Shipper's Letter of Instruction and the cargo list.
@@ -238,7 +243,7 @@ export const freightQty = (w: WR) => r2(w.pieces.reduce((a, p) => a + (w.ship ==
 // What the receipt says about the size of the shipment, as the system figures it: Ocean = Total Cubic Feet, Air = Total Weight (the pounds the price is made from).
 export const totalMeasure = (w: WR) => (w.ship === "Ocean" ? { key: "cuft" as const, label: "Total Cubic Feet", value: `${freightQty(w)} cu ft` } : { key: "weight" as const, label: "Total Weight", value: `${freightQty(w)} lb` });
 export const freightFee = (w: WR) => ((w.rate ?? 0) > 0 ? (w.pieces.some(legacyRound) ? r2o : r2)(freightQty(w) * (w.rate ?? 0)) : 0);
-export const freightDesc = (w: WR) => `Freight Charges - Ref. WR: ${w.id} - (${freightQty(w)} ${w.ship === "Ocean" ? "cuf" : "lbs"}) - Number Of Pieces: ${w.pieces.length}`;
+export const freightDesc = (w: WR) => `Freight Charges${toDR(w) ? ` (${shipName(w).toUpperCase()})` : ""} - Ref. WR: ${w.id} - (${freightQty(w)} ${w.ship === "Ocean" ? "cuf" : "lbs"}) - Number Of Pieces: ${w.pieces.length}`;
 export const charges = (w: WR) => r2(freightFee(w) + w.fees.filter((f) => f.kind === "charge").reduce((a, f) => a + f.amount, 0));
 export const credits = (w: WR) => r2(w.fees.filter((f) => f.kind === "credit").reduce((a, f) => a + f.amount, 0));
 export const quote = (w: WR) => calcInsurance(w.declared);
