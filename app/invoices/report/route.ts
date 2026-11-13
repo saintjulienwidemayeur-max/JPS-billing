@@ -7,6 +7,6 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   await tryLoaded();
   const q = Object.fromEntries(new URL(req.url).searchParams) as Record<string, string>;
-  const rows = invoiceRows(q), what = [q.ship && `Ship: ${q.ship}`, q.status && `Status: ${q.status}`, q.customer && `Customer: ${q.customer}`].filter(Boolean).join("  |  ");
+  const rows = invoiceRows(q), what = [q.ship && `Ship: ${q.ship}`, q.status && `Status: ${q.status}`, q.shipment && `Shipment: ${q.shipment}`, q.customer && `Customer: ${q.customer}`].filter(Boolean).join("  |  ");
   return new Response(Buffer.from(await invoiceReportPdf(rows, what)), { headers: { "content-type": "application/pdf", "content-disposition": 'attachment; filename="Invoice-report.pdf"' } });
 }

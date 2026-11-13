@@ -4,7 +4,9 @@ import { db, total, paidAmt, balance, cuft, r2, type WR } from "./wh-store";
 export type InvQ = Record<string, string | undefined>;
 export function invoiceRows(q: InvQ): WR[] {
   const cust = (q.customer ?? "").trim().toLowerCase();
+  const onShip = q.shipment ? new Set(db.loads.filter((l) => l.shipment === q.shipment).map((l) => l.wr)) : undefined;
   return db.wrs.filter((w) => w.invoice
+    && (!onShip || onShip.has(w.id))
     && (!q.ship || w.ship === q.ship)
     && (!q.rep || w.rep === q.rep)
     && (!cust || w.customer.toLowerCase().includes(cust) || String(w.cust) === cust)

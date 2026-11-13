@@ -1,11 +1,14 @@
 import { notFound } from "next/navigation";
 import { NotifyForm } from "@/components/notify";
-import { cancelInvoice, voidPayment, notifyInvoiceEmail } from "@/lib/billing-actions";
+import { cancelInvoice, voidPayment, notifyInvoiceEmail, editInvoice } from "@/lib/billing-actions";
 import { listDocs } from "@/lib/persist";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { db, shipName, docLines, custOf, repOf, wrCode, total, paidAmt, balance, payStatus, money, insuranceFee, quote, r2, freightFee, freightQty, freightDesc, receiverOf, toUSA } from "@/lib/wh-store";
 import { cardFees } from "@/lib/pricing";
 import { shortDate } from "@/lib/fmt";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { usToIso } from "@/lib/clock";
 import { PrintButton } from "@/components/print-button";
 import { payUrl, payToken } from "@/lib/paylink";
 import { stripeReady } from "@/lib/stripe";
@@ -48,6 +51,34 @@ export default async function Page({ params, searchParams }: { params: Promise<{
         {w.invoiceSent ? `E-mailed to the customer by itself on ${w.invoiceSent} (PDF attached).` : w.invoiceMail?.error ? `Not e-mailed: ${w.invoiceMail.error}${w.invoiceMail.tries < 4 ? " It will be tried again by itself." : ""}` : "The invoice is e-mailed to the customer by itself a few seconds after it is made."}
       </p>
       {docs.length > 0 && <ul className="no-print mt-1 grid gap-0.5 text-xs">{docs.map((d) => <li key={d.id}><a href={`/docs/${d.id}`} target="_blank" className="text-brand underline">{d.name}</a> <span className="text-zinc-500">· {d.note} · {new Date(d.created).toLocaleString("en-US")}</span></li>)}</ul>}
+      <details className="no-print mt-3 rounded-lg border bg-white p-3 text-xs">
+        <summary className="cursor-pointer text-sm font-semibold text-brand">Edit this invoice</summary>
+        <form action={editInvoice} className="mt-3 grid gap-3">
+          <input type="hidden" name="wr" value={w.id} />
+          <div className="grid gap-2 sm:grid-cols-4">
+            <label className="grid gap-1 font-medium text-zinc-600">Invoice date<Input name="date" type="date" defaultValue={usToIso(w.invoiceDate ?? w.date)} /></label>
+            <label className="grid gap-1 font-medium text-zinc-600">{w.ship === "Ocean" ? "Rate per cubic foot ($)" : "Rate per lb ($)"}<Input name="rate" type="number" step="0.01" min="0" defaultValue={(w.rate ?? 0).toFixed(2)} /></label>
+            <label className="grid gap-1 font-medium text-zinc-600">Representative<select name="rep" defaultValue={w.rep} className="h-9 rounded-md border bg-white px-2 text-sm"><option value="">–</option>{db.reps.map((r) => <option key={r.id} value={r.id}>{r.name} ({r.initials})</option>)}</select></label>
+            <label className="grid gap-1 font-medium text-zinc-600">Notes<Input name="notes" defaultValue={w.comments} maxLength={300} /></label>
+          </div>
+          <div className="font-semibold text-zinc-700">Fees and credits (freight is made from the rate above)</div>
+          {w.fees.map((fee) => (
+            <div key={fee.id} className="grid items-center gap-2 sm:grid-cols-[1fr_8rem_8rem_auto]">
+              <Input name={`label_${fee.id}`} defaultValue={fee.label} maxLength={80} aria-label="Name" />
+              <Input name={`amount_${fee.id}`} type="number" step="0.01" min="0" defaultValue={fee.amount.toFixed(2)} aria-label="Amount" />
+              <select name={`kind_${fee.id}`} defaultValue={fee.kind} className="h-9 rounded-md border bg-white px-2 text-sm" aria-label="Type"><option value="charge">Fee</option><option value="credit">Credit (minus)</option></select>
+              <label className="flex items-center gap-1 text-red-700"><input type="checkbox" name={`del_${fee.id}`} value="1" /> Remove</label>
+            </div>
+          ))}
+          <div className="grid items-center gap-2 border-t pt-2 sm:grid-cols-[1fr_8rem_8rem_auto]">
+            <Input name="newlabel" placeholder="Add a fee or credit: name" maxLength={80} aria-label="New fee name" />
+            <Input name="newamount" type="number" step="0.01" min="0" placeholder="Amount" aria-label="New fee amount" />
+            <select name="newkind" className="h-9 rounded-md border bg-white px-2 text-sm" aria-label="New fee type"><option value="charge">Fee</option><option value="credit">Credit (minus)</option></select>
+            <span />
+          </div>
+          <div><Button type="submit">Save the invoice</Button> <span className="text-zinc-500">The customer is not told by itself: use Notify afterwards.</span></div>
+        </form>
+      </details>
       <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-3">
         <div><dt className="text-xs text-zinc-500">Invoice date</dt><dd className="font-medium">{shortDate(w.invoiceDate ?? w.date)}</dd></div>
         <div><dt className="text-xs text-zinc-500">Shipment ID</dt><dd className="font-medium">{shipment || "–"}</dd></div>

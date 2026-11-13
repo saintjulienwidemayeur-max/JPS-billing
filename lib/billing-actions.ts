@@ -1,6 +1,6 @@
 "use server";
 import { redirect } from "next/navigation";
-import { db, isCardMethod, addCardFee, nowStr, charges, balance, money, wrCode, r2, findCustomer, newCustomer, repOf, timeNow, creditOf, custOf, newOrderId, orderBalance, orderTotal, ORDER_FEE_PCT, ORDER_STATUSES, type Order, type OrderStatus, remember as rememberName, billBalance, debtBalance, type Debt, type Expense , priced } from "./wh-store";
+import { db, freightFee, insuranceFee, isCardMethod, addCardFee, nowStr, charges, balance, money, wrCode, r2, findCustomer, newCustomer, repOf, timeNow, creditOf, custOf, newOrderId, orderBalance, orderTotal, ORDER_FEE_PCT, ORDER_STATUSES, type Order, type OrderStatus, remember as rememberName, billBalance, debtBalance, type Debt, type Expense , priced } from "./wh-store";
 import { act } from "./act";
 import { cardFee } from "./pricing";
 import { requireUser } from "./users";
@@ -151,6 +151,40 @@ export const refundCredit = act("refundCredit", async (f: F) => {
 export const markInvoiceSent = act("markInvoiceSent", async (wr: string) => {
   const w = db.wrs.find((x) => x.id === wr);
   if (w?.invoice) { w.invoiceSent = nowStr(); back(`/invoices/${w.invoice}`, { ok: "Marked as emailed." }); }
+});
+// Edit an invoice: date, rate, representative, notes, and the fee / credit lines (change, remove, add one). The receipt keeps what the warehouse typed; this is the billing correction.
+export const editInvoice = act("editInvoice", async (f: F) => {
+  const w = db.wrs.find((x) => x.id === s(f, "wr"));
+  if (!w?.invoice) return;
+  const here = `/invoices/${encodeURIComponent(w.invoice)}`;
+  const iso = s(f, "date");
+  if (iso && !/^\d{4}-\d{2}-\d{2}$/.test(iso)) back(here, { err: "Enter a valid invoice date." });
+  const rate = s(f, "rate") === "" ? (w.rate ?? 0) : num(f, "rate");
+  if (!Number.isFinite(rate) || rate < 0 || rate > 1000) back(here, { err: "Enter a rate of 0 or more." });
+  const rep = s(f, "rep");
+  if (rep && !repOf(rep)) back(here, { err: "That representative does not exist." });
+  const next: typeof w.fees = [];
+  for (const fee of w.fees) {
+    if (s(f, `del_${fee.id}`)) continue;
+    const label = s(f, `label_${fee.id}`) || fee.label, amount = s(f, `amount_${fee.id}`) === "" ? fee.amount : num(f, `amount_${fee.id}`), kind = s(f, `kind_${fee.id}`) === "credit" ? "credit" as const : "charge" as const;
+    if (!Number.isFinite(amount) || amount < 0 || amount > 1_000_000) back(here, { err: `${fee.label}: enter an amount of 0 or more.` });
+    if (label.length > 80) back(here, { err: `${fee.label}: the name is too long (80 characters max).` });
+    next.push({ ...fee, label, amount: r2(amount), kind });
+  }
+  const nl = s(f, "newlabel"), na = s(f, "newamount");
+  if (nl || na) {
+    const amount = num(f, "newamount");
+    if (!nl || nl.length > 80) back(here, { err: "Name the new fee or credit (80 characters max)." });
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000) back(here, { err: "Enter the amount of the new fee or credit (more than 0)." });
+    next.push({ id: db.n.fee++, label: nl, amount: r2(amount), kind: s(f, "newkind") === "credit" ? "credit" : "charge" });
+  }
+  const credits = next.filter((x) => x.kind === "credit").reduce((a, x) => a + x.amount, 0), charges = next.filter((x) => x.kind === "charge").reduce((a, x) => a + x.amount, 0);
+  if (credits > charges + freightFee(w) + insuranceFee(w) + 0.001 && (rate > 0 || charges > 0)) back(here, { err: "The credits are more than the charges: check the amounts." });
+  w.fees = next; w.rate = r2(rate);
+  if (iso) w.invoiceDate = isoToUs(iso);
+  w.rep = rep || w.rep;
+  w.comments = s(f, "notes").slice(0, 300);
+  back(here, { ok: "Invoice saved. Use Notify to send the corrected invoice to the customer again." });
 });
 export const cancelInvoice = act("cancelInvoice", async (wr: string) => {
   const w = db.wrs.find((x) => x.id === wr);

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { db, charges, total, money, wrCode, repLabel , priced } from "@/lib/wh-store";
+import { reportTotals } from "@/lib/invoice-report";
 import { createInvoice, createInvoices } from "@/lib/billing-actions";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { Input } from "@/components/ui/input";
@@ -14,7 +15,7 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
   const needle = (q.q ?? q.c ?? "").trim().toLowerCase();
   const onShip = q.ship ? new Set(db.loads.filter((l) => l.shipment === q.ship).map((l) => l.wr)) : undefined, digits = needle.replace(/\D/g, "");
   const todo = db.wrs.filter((w) => !w.invoice && !w.estimate && (w.pieces.length > 0 || charges(w) > 0) && priced(w) && (!onShip || onShip.has(w.id)) && (!needle || String(w.cust) === needle || w.customer.toLowerCase().includes(needle) || w.id === needle || (digits.length >= 4 && (db.customers.find((c) => c.no === w.cust)?.phone ?? "").replace(/\D/g, "").includes(digits)))).sort((a, b) => Number(a.id) - Number(b.id));
-  const shown = todo.slice(0, 100);
+  const shown = todo.slice(0, 100), tot = reportTotals(todo);
   return (
     <main className="mx-auto max-w-5xl px-4 py-6">
       <h1>Invoice</h1>
@@ -23,6 +24,17 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
       {q.ok && <p role="status" className="mt-2 text-sm font-medium text-green-700">{q.ok}</p>}
       <form className="mt-4 flex flex-wrap gap-2"><Input name="q" defaultValue={q.q ?? q.c} placeholder="Customer name, number or phone, or receipt number" className="max-w-80" /><select name="ship" defaultValue={q.ship ?? ""} className="h-9 rounded-md border bg-white px-2 text-sm" aria-label="Shipment"><option value="">All shipments</option>{[...db.shipments].reverse().map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}</select><Button type="submit" variant="outline">Find</Button></form>
       <p className="mt-3 text-sm text-zinc-600">{todo.length} receipt{todo.length === 1 ? "" : "s"} waiting for an invoice{todo.length > shown.length ? ` (the first ${shown.length} are shown)` : ""}.</p>
+      {todo.length > 0 && (
+        <section className="mt-3 rounded-lg border-2 border-black p-3 text-sm" aria-label="Totals">
+          <b>Totals{q.ship ? ` of ${q.ship}` : ""}</b> · {todo.length} receipt{todo.length === 1 ? "" : "s"} waiting for an invoice
+          <dl className="mt-1 grid max-w-md grid-cols-[1fr_auto] gap-x-8 gap-y-0.5">
+            <dt>Total pieces</dt><dd className="text-right">{tot.pieces}</dd>
+            <dt>Total weight</dt><dd className="text-right">{tot.lbs} lbs</dd>
+            <dt>Total cubic feet</dt><dd className="text-right">{tot.cuft} cu ft</dd>
+            <dt className="font-bold">Total amount</dt><dd className="text-right font-bold">{money(tot.amount)}</dd>
+          </dl>
+        </section>
+      )}
       {shown.length > 1 && <form action={createInvoices} className="mt-2"><input type="hidden" name="ids" value={shown.map((w) => w.id).join(",")} /><ConfirmSubmit message={`Make ${shown.length} invoices now? Each customer with an e-mail gets the invoice by e-mail.`}>Make all {shown.length} invoices{q.ship ? ` of ${q.ship}` : ""}</ConfirmSubmit></form>}
       {shown.length > 0 && (
         <table className="mt-2 w-full text-left text-sm"><thead><tr>{["Date", "Receipt", "Customer", "Rep", "Total", ""].map((h, i) => <th key={i} className={th}>{h}</th>)}</tr></thead>
