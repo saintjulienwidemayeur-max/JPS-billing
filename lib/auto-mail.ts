@@ -1,6 +1,6 @@
 // The invoice goes to the customer by e-mail (PDF attached) by itself when it is made: nobody presses anything.
 // Logged in the maillog, and the PDF that was sent is kept (wh_docs).
-import { db, nowStr, timeNow, custOf, total, balance, paidAmt, orderTotal, orderPaid, orderBalance, type WR, type Order } from "./wh-store";
+import { db, priced, charges, nowStr, timeNow, custOf, total, balance, paidAmt, orderTotal, orderPaid, orderBalance, type WR, type Order } from "./wh-store";
 import { flush, saveDoc } from "./persist";
 import { mailEnabled, mailTo } from "./mail";
 import { usableEmail } from "./mailrules";
@@ -115,6 +115,28 @@ let last = 0;
 export function retryInvoiceMails() {
   if (Date.now() - last < 900_000) return; last = Date.now();
   for (const w of db.wrs) if (w.invoice && !w.invoiceSent && w.invoiceMail && w.invoiceMail.tries < 4) queueMail(() => emailInvoice(w));
+}
+
+// "Make the invoices automatically when a cargo ships" (Billing > Invoice): once a cargo is shipped (in the warehouse app), the invoice of every receipt
+// of it that is final and fully loaded is made and e-mailed by itself, once per cargo. Checked at most every 3 minutes (called from the layout).
+export function invoiceShipment(name: string): { made: number; skipped: number } {
+  const loaded = new Set(db.loads.map((l) => l.no)), ids = [...new Set(db.loads.filter((l) => l.shipment === name).map((l) => l.wr))];
+  let made = 0, skipped = 0;
+  for (const id of ids) {
+    const w = db.wrs.find((x) => x.id === id);
+    if (!w || w.invoice) continue;
+    if (w.estimate || !priced(w) || (!w.pieces.length && charges(w) <= 0) || w.pieces.some((p) => !loaded.has(p.no))) { skipped++; continue; }
+    for (const p of w.pieces) { p.old ??= false; p.rd ??= 0; }
+    w.invoice = `INV-${db.n.inv++}`; w.invoiceDate = nowStr(); made++;
+    queueMail(() => emailInvoice(w));
+  }
+  return { made, skipped };
+}
+let lastShip = 0;
+export function autoInvoiceShipped() {
+  if (db.settings.autoInvoiceShip !== true || Date.now() - lastShip < 180_000) return; lastShip = Date.now();
+  for (const sh of db.shipments) if (sh.shipped && !sh.invoiced) { invoiceShipment(sh.name); sh.invoiced = nowStr(); }
+  queueMail(async () => {}); // saves what was changed
 }
 
 // The order's invoice (PDF) by e-mail: from the "Notify by e-mail" button of the order. Returns an error text, or "".

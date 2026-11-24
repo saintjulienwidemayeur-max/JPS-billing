@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db, expenseOf, total, paidAmt, balance, money, r2, chargeable, cuft, wrCode, shToUSA, type WR } from "@/lib/wh-store";
+import { invoiceCargo } from "@/lib/billing-actions";
+import { ConfirmSubmit } from "@/components/confirm-submit";
 import { PrintButton } from "@/components/print-button";
 
 export const metadata = { title: "Shipment · JP's Billing" };
 const th = "px-2 py-1.5 font-semibold", td = "px-2 py-1.5";
 
 // What is inside one shipment (cargo): every customer and receipt loaded on it, with pieces, weight, cubic feet and what is billed, paid and owed.
-export default async function Page({ params }: { params: Promise<{ name: string }> }) {
+export default async function Page({ params, searchParams }: { params: Promise<{ name: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
+  const q = await searchParams;
   const name = decodeURIComponent((await params).name);
   const sh = db.shipments.find((x) => x.name === name);
   if (!sh) notFound();
@@ -26,6 +29,9 @@ export default async function Page({ params }: { params: Promise<{ name: string 
         <div><h1>{sh.name}</h1><p className="text-zinc-600">{sh.ship} · {shToUSA(sh) ? "Haiti → Miami" : sh.dir === "DR" ? "Miami → DR (SDQ)" : "Miami → Haiti"} · created {sh.date} · {sh.shipped ? `shipped ${sh.shipped}` : "open"} · cargo {sh.cargoId}</p></div>
         <div className="no-print flex flex-wrap items-center gap-2"><Link href="/reports/shipments" className="text-brand underline">All shipments</Link><a href={`/reports/shipments/export?ship=${enc}`} className="inline-flex h-9 items-center rounded-md border border-brand px-3 font-medium text-brand">Download (Excel)</a><PrintButton /></div>
       </div>
+      {q.ok && <p role="status" className="no-print mt-2 font-medium text-green-700">{q.ok}</p>}
+      {q.err && <p role="alert" className="no-print mt-2 font-medium text-red-700">{q.err}</p>}
+      {rows.some((r) => !r.w.invoice) && <form className="no-print mt-3"><ConfirmSubmit formAction={invoiceCargo.bind(null, name)} message={`Make the invoices of ${name} now? Each customer with an e-mail gets theirs by e-mail.`}>Make the invoices of this cargo ({rows.filter((r) => !r.w.invoice).length} not invoiced)</ConfirmSubmit></form>}
       <section className="mt-4 grid gap-3 sm:grid-cols-4">
         {[["Customers", String(customers)], ["Receipts", String(rows.length)], ["Pieces", String(sum((r) => r.pieces))], ["Weight", `${sum((r) => r.lbs)} lbs`], ["Cubic feet", `${sum((r) => r.cu)} cu ft`], ["Billed", money(sum((r) => r.billed))], ["Paid", money(sum((r) => r.paid))], ["Owed", money(sum((r) => r.owed))]].map(([k, v]) => <div key={k} className="rounded-lg border bg-white p-3"><div className="text-xs text-zinc-500">{k}</div><div className="text-xl font-bold">{v}</div></div>)}
       </section>

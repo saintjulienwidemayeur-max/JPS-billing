@@ -5,7 +5,7 @@ import { act } from "./act";
 import { cardFee } from "./pricing";
 import { requireUser } from "./users";
 import { sendBalance, sendPaymentNotice } from "./balance-notify";
-import { queueMail, emailInvoice, emailOrder } from "./auto-mail";
+import { queueMail, emailInvoice, emailOrder, invoiceShipment } from "./auto-mail";
 import { waNowInvoice, waNowOrder, waFailed, waSay } from "./whatsapp";
 import { invoicePdf, orderPdf } from "./pdf";
 import { payUrl } from "./paylink";
@@ -58,6 +58,20 @@ export const createInvoices = act("createInvoices", async (f: F) => {
     queueMail(() => emailInvoice(w));
   }
   back("/invoices/new", { ok: `${made} invoice${made === 1 ? "" : "s"} made${skipped ? `, ${skipped} skipped` : ""}. Each one is e-mailed to its customer by itself (those with no usable e-mail are listed in Manage invoices).` });
+});
+// The switch "make the invoices by themselves when a cargo ships" (Invoice page).
+export const setAutoInvoice = act("setAutoInvoice", async (f: F) => {
+  const on = s(f, "on") === "1";
+  if (on && db.settings.autoInvoiceShip !== true) for (const sh of db.shipments) if (sh.shipped && !sh.invoiced) sh.invoiced = "before"; // cargo already shipped is never invoiced by surprise: only the ones shipped from now on
+  db.settings.autoInvoiceShip = on;
+  back("/invoices/new", { ok: db.settings.autoInvoiceShip ? "On: when a cargo ships, its invoices are made and e-mailed by themselves." : "Off: invoices are made by hand (Make all invoices)." });
+});
+// Make the invoices of one cargo now (the "Shipments report > open a cargo" button): the same as the automatic one, on demand.
+export const invoiceCargo = act("invoiceCargo", async (name: string) => {
+  const to = `/reports/shipments/${encodeURIComponent(name)}`;
+  if (!db.shipments.some((x) => x.name === name)) return;
+  const r = invoiceShipment(name);
+  back(to, { ok: `${r.made} invoice${r.made === 1 ? "" : "s"} made and e-mailed${r.skipped ? `; ${r.skipped} receipt${r.skipped === 1 ? "" : "s"} not invoiced (estimate, not priced yet, or some pieces not loaded)` : ""}.` });
 });
 export const addPayment = act("addPayment", async (f: F) => {
   const w = db.wrs.find((x) => x.id === s(f, "wr"));

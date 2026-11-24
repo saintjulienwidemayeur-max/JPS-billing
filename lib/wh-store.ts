@@ -65,7 +65,7 @@ export type Prealert = {
 };
 export type Load = { shipment: string; pallet: string; wr: string; no: number; date: string; here?: string; by?: string; hereBy?: string };
 // `dir`: "USA" = goes from Haiti to Miami (absent = Miami to Haiti, as before). Same fields as the warehouse app.
-export type Shipment = { name: string; ship: Ship; cargoId: string; date: string; shipped?: string; shippedBy?: string; dir?: "USA" | "DR" };
+export type Shipment = { name: string; ship: Ship; cargoId: string; date: string; shipped?: string; shippedBy?: string; dir?: "USA" | "DR"; invoiced?: string };
 export const US_DEST = "Miami";
 export const toUSA = (w: { dest?: string }) => w.dest === US_DEST;
 export const shToUSA = (sh: { dir?: string } | undefined) => sh?.dir === "USA";
@@ -113,7 +113,7 @@ export const rateFor = (c: { rates?: CustomerRates } | undefined, ship: Ship) =>
 // Settings the administrator can change (Administration > Fees & rates).
 // Storage: the terms say a storage fee applies after 30 days in the warehouse. storageFee is the fee for each 30 days beyond the free period, per receipt
 // (0 = no automatic storage fee).
-export type Settings = { storageFreeDays: number; storageFee: number; siteDirection?: boolean; wa?: { on: boolean; cc?: string; events?: Partial<Record<"parcel" | "receipt" | "shipped" | "arrived" | "ready" | "invoice" | "order", boolean>> }; rates?: Record<string, { air: number; ocean: number }> };
+export type Settings = { storageFreeDays: number; storageFee: number; siteDirection?: boolean; autoInvoiceShip?: boolean; wa?: { on: boolean; cc?: string; events?: Partial<Record<"parcel" | "receipt" | "shipped" | "arrived" | "ready" | "invoice" | "order", boolean>> }; rates?: Record<string, { air: number; ocean: number }> };
 export const DEFAULT_SETTINGS: Settings = { storageFreeDays: 30, storageFee: 10 };
 const today = () => usToday();
 type WhDb = {

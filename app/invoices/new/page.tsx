@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { db, charges, total, money, wrCode, repLabel , priced } from "@/lib/wh-store";
 import { reportTotals } from "@/lib/invoice-report";
-import { createInvoice, createInvoices } from "@/lib/billing-actions";
+import { createInvoice, createInvoices, setAutoInvoice } from "@/lib/billing-actions";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,10 @@ export default async function Page({ searchParams }: { searchParams: SP }) {
       <p className="text-sm text-zinc-600">Make the invoice of a warehouse receipt. The receipt (pieces, fees, insurance) is prepared in the warehouse app; here it becomes an invoice with its number. Only receipts with pieces or fees are listed (an estimate is not invoiced until it is final).</p>
       {q.err && <p role="alert" className="mt-2 text-sm font-medium text-red-700">{q.err}</p>}
       {q.ok && <p role="status" className="mt-2 text-sm font-medium text-green-700">{q.ok}</p>}
+      <form action={setAutoInvoice} className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border bg-white p-3 text-sm">
+        <label className="flex items-center gap-2 font-medium"><input type="checkbox" name="on" value="1" defaultChecked={db.settings.autoInvoiceShip === true} className="h-4 w-4" /> Make the invoices by themselves when a cargo ships (each customer gets theirs by e-mail)</label>
+        <Button type="submit" variant="outline">Save</Button>
+      </form>
       <form className="mt-4 flex flex-wrap gap-2"><Input name="q" defaultValue={q.q ?? q.c} placeholder="Customer name, number or phone, or receipt number" className="max-w-80" /><select name="ship" defaultValue={q.ship ?? ""} className="h-9 rounded-md border bg-white px-2 text-sm" aria-label="Shipment"><option value="">All shipments</option>{[...db.shipments].reverse().map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}</select><Button type="submit" variant="outline">Find</Button></form>
       <p className="mt-3 text-sm text-zinc-600">{todo.length} receipt{todo.length === 1 ? "" : "s"} waiting for an invoice{todo.length > shown.length ? ` (the first ${shown.length} are shown)` : ""}.</p>
       {todo.length > 0 && (
